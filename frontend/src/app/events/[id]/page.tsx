@@ -34,7 +34,8 @@ function IndicatorRow({ i, released, onSaved }: { i: Indicator; released: boolea
     return (
       <tr className="num">
         <td>{i.name}<div className="text-[10px] text-muted">{i.code}</div></td>
-        <td>{i.previous ?? "—"}</td><td>{i.previous_revised ?? "—"}</td><td>{i.consensus ?? "—"}</td>
+        <td>{i.previous ?? "—"}</td><td>{i.previous_revised ?? "—"}</td>
+        <td>{i.consensus ?? "—"}{i.consensus_source && <div className="text-[10px] text-muted whitespace-normal max-w-[180px]">{i.consensus_source}</div>}</td>
         <td className="text-gold">{i.actual ?? "—"}{i.actual != null && i.unit}</td>
         <td>{i.actual != null ? <Unverified verified={i.actual_verified} /> : "—"}<div className="text-[10px] text-muted whitespace-normal max-w-[180px]">{i.actual_source}</div></td>
         <td><button className="btn" onClick={() => setEdit(true)}>編集</button></td>
@@ -190,7 +191,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
           <StatusBadge status={ev.status} label={ev.status_ja} />
           {ev.is_composite && <Tag>複合イベント</Tag>}
           {ev.origin === "conversation" && <Tag tone="red">会話由来・未照合</Tag>}
-          {!ev.release_time_confirmed && <Tag tone="red">時刻未確定</Tag>}
+          {ev.release_time_confirmed ? <Tag tone="green">公式日程で確認済み</Tag> : <Tag tone="red">時刻未確定</Tag>}
         </div>
         <h1 className="text-xl font-bold mt-2">{ev.title}</h1>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm mt-1">
@@ -200,11 +201,18 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         </div>
         {ev.date_label && ev.release_at && <div className="text-xs text-muted mt-1">日付表記: {ev.date_label}</div>}
         {ev.notes && <p className="text-xs text-muted mt-2">{ev.notes}</p>}
+        {ev.schedule_sources?.length > 0 && (
+          <div className="text-[11px] text-muted mt-1">日程の根拠: {ev.schedule_sources.map((s, i) => (
+            <a key={i} href={s.url} target="_blank" rel="noreferrer" className="text-sky-300 underline mr-3">{s.name}</a>
+          ))}</div>
+        )}
         {ev.parent && <div className="text-xs mt-2">親イベント: <Link className="text-sky-300" href={`/events/${ev.parent.id}`}>{ev.parent.title}</Link></div>}
         {ev.children.length > 0 && <div className="text-xs mt-2">関連する子イベント: {ev.children.map((c) => <Link key={c.id} className="text-sky-300 mr-3" href={`/events/${c.id}`}>{c.title}（{fmtJst(c.release_at, false)}）</Link>)}</div>}
         <div className="flex flex-wrap gap-2 mt-3">
           {!released && <button className="btn btn-gold" onClick={() => setShowForm((s) => !s)}>{showForm ? "入力を閉じる" : "＋ 新しい予測バージョン"}</button>}
+          {!released && <button className="btn" disabled={busy} onClick={() => action(`/api/events/${ev.id}/forecasts/ai`, (r) => `AI予測 Ver.${r.version_no} を作成しました`)}>{busy ? "処理中…（AI予測は1〜2分かかります）" : "AI予測を作成"}</button>}
           {!released && <button className="btn" disabled={busy} onClick={() => action(`/api/events/${ev.id}/forecasts/baseline`, (r) => `統計ベースライン Ver.${r.version_no} を作成しました`)}>統計ベースライン予測を作成</button>}
+          {released && ev.release_at && !priceOutcome?.verified && <button className="btn" disabled={busy} onClick={() => action(`/api/events/${ev.id}/prices/fetch`, (r) => `価格データ ${r.inserted}本を追加。検証結果: ${r.verification.result}`)}>価格データをAPIから取得</button>}
           {released && ev.release_at && <button className="btn btn-gold" disabled={busy} onClick={() => action(`/api/events/${ev.id}/verify`, (r) => `検証結果: ${r.result}${r.missing?.length ? `（不足: ${r.missing.join("、")}）` : ""}`)}>検証を実行</button>}
         </div>
         {msg && <div className="text-sm mt-2 whitespace-pre-wrap text-sky-300">{msg}</div>}

@@ -37,7 +37,7 @@ def report(r: ResearchReport) -> dict:
 def event_summary(e: Event) -> dict:
     d = {k: getattr(e, k) for k in (
         "id", "slug", "title", "category", "categories", "release_at", "release_time_confirmed",
-        "date_label", "importance", "status", "is_composite", "parent_id", "cluster", "origin", "notes",
+        "date_label", "importance", "status", "is_composite", "parent_id", "cluster", "origin", "notes", "schedule_sources",
     )}
     d["status_ja"] = STATUS_JA.get(e.status, e.status)
     d["indicators"] = [indicator(i) for i in e.indicators]

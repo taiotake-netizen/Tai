@@ -80,3 +80,84 @@ def seed(db: Session) -> dict:
         created.append(spec["slug"])
     db.commit()
     return {"created": created}
+
+
+ET = ZoneInfo("America/New_York")
+
+
+def et(s: str) -> datetime:
+    return datetime.fromisoformat(s).replace(tzinfo=ET)
+
+
+def _apply_indicators(db: Session, ev: Event, specs: list[dict]) -> None:
+    by_code = {i.code: i for i in ev.indicators}
+    for n, spec in enumerate(specs):
+        spec = dict(spec)
+        ind = by_code.get(spec["code"])
+        if spec.pop("_delete_if_empty", False):
+            if ind is not None and ind.actual is None:
+                db.delete(ind)
+                ev.indicators.remove(ind)
+            continue
+        if ind is None:
+            ind = Indicator(event_id=ev.id, code=spec["code"], name=spec.get("name", spec["code"]),
+                            unit=spec.get("unit", ""), sort_order=len(ev.indicators) + n)
+            db.add(ind)
+            ev.indicators.append(ind)
+        for k, v in spec.items():
+            if k != "code":
+                setattr(ind, k, v)
+        if "actual" in spec:
+            ind.actual_recorded_at = utcnow()
+
+
+def sync_official_schedule(db: Session) -> dict:
+    """公式スケジュール・公式実績をDBへ反映する（REVが上がった分だけ・予測は変更しない）。"""
+    from . import official_2026 as O
+
+    updated, created = [], []
+    now = utcnow()
+    for slug, spec in O.UPDATES.items():
+        ev = db.scalar(select(Event).where(Event.slug == slug))
+        if ev is None or ev.schedule_rev >= O.REV:
+            continue
+        if "title" in spec:
+            ev.title = spec["title"]
+        if "release_et" in spec:
+            ev.release_at = et(spec["release_et"])
+        ev.release_time_confirmed = spec.get("confirmed", ev.release_time_confirmed)
+        ev.schedule_sources = spec.get("sources", [])
+        if "date_label" in spec:
+            ev.date_label = spec["date_label"]
+        if "notes" in spec:
+            ev.notes = spec["notes"]
+        _apply_indicators(db, ev, spec.get("indicators", []))
+        ev.schedule_rev = O.REV
+        updated.append(slug)
+
+    def make(spec: dict, parent: Event | None = None) -> Event:
+        rel = et(spec["release_et"])
+        ev = Event(
+            slug=spec["slug"], title=spec["title"], category=spec.get("category", parent.category if parent else "OTHER"),
+            categories=spec.get("categories", [spec.get("category", parent.category if parent else "OTHER")]),
+            release_at=rel, release_time_confirmed=spec.get("confirmed", parent.release_time_confirmed if parent else False),
+            importance=spec.get("importance", 5), is_composite=spec.get("is_composite", False),
+            origin="official_schedule", notes=spec.get("notes"),
+            schedule_sources=spec.get("sources", parent.schedule_sources if parent else []), schedule_rev=O.REV,
+            parent_id=parent.id if parent else None,
+            status=EventStatus.UPCOMING if rel > now else EventStatus.AWAITING_DATA,
+        )
+        db.add(ev)
+        db.flush()
+        _apply_indicators(db, ev, spec.get("indicators", []))
+        return ev
+
+    for spec in O.NEW_EVENTS:
+        if db.scalar(select(Event).where(Event.slug == spec["slug"])):
+            continue
+        ev = make(spec)
+        for ch in spec.get("children", []):
+            make(ch, parent=ev)
+        created.append(spec["slug"])
+    db.commit()
+    return {"updated": updated, "created": created}

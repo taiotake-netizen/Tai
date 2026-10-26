@@ -19,6 +19,9 @@ services:
       CORS_ORIGINS: http://localhost:3000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+      AUTO_AI_FORECAST: ${AUTO_AI_FORECAST:-1}
+      TWELVEDATA_API_KEY: ${TWELVEDATA_API_KEY:-}
+      CALENDAR_FEED_ENABLED: ${CALENDAR_FEED_ENABLED:-0}
     depends_on:
       db:
         condition: service_healthy

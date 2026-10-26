@@ -8,7 +8,7 @@ interface Status {
   coverage: { symbol: string; timeframe_min: number; bars: number; first: string; last: string }[];
   batches: { id: number; filename: string; symbol: string; timeframe_min: number | null; status: string; message: string | null; rows_inserted: number; rows_skipped: number; assumed_tz: string; created_at: string }[];
   jobs: { id: number; job: string; status: string; message: string | null; started_at: string; finished_at: string | null }[];
-  sources: { key: string; name: string; targets: string; phase: number; status: string }[];
+  sources: { key: string; name: string; targets: string; status: string }[];
   supported_symbols: string[];
 }
 
@@ -30,6 +30,14 @@ export default function DataPage() {
       setMsg(`${r.batch.message}。検証完了: ${r.refresh.verified.length}件`);
     } catch (e) { setMsg("取込失敗: " + errorText(e)); }
     finally { setBusy(false); reload(); }
+  }
+  async function calendar() {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api<any>("/api/data/calendar/fetch", { method: "POST" });
+      const mm = r.time_mismatches.map((m: any) => `・${m.title}: カレンダー ${new Date(m.feed_time).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} / 登録 ${new Date(m.event_time).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`).join("\n");
+      setMsg(`予想・前回値を更新 ${r.updated.length}件、追加 ${r.created.length}件${mm ? `\n時刻不一致（要確認）:\n${mm}` : ""}`);
+    } catch (e) { setMsg(errorText(e)); } finally { setBusy(false); reload(); }
   }
   async function refresh() {
     setBusy(true);
@@ -60,9 +68,20 @@ export default function DataPage() {
         <>
           <section className="card">
             <div className="card-title">データソース</div>
-            <div className="overflow-x-auto"><table className="tbl"><thead><tr><th>ソース</th><th>対象</th><th>フェーズ</th><th>状態</th></tr></thead>
-              <tbody>{data.sources.map((s) => <tr key={s.key}><td>{s.name}</td><td className="text-xs">{s.targets}</td><td>Phase {s.phase}</td><td><Tag tone={s.status === "利用中" ? "green" : "slate"}>{s.status}</Tag></td></tr>)}</tbody></table></div>
-            <p className="text-[11px] text-muted mt-2">外部API（有料のものを含む）への接続は、利用規約と契約内容を確認したうえで設定します。</p>
+            <div className="overflow-x-auto"><table className="tbl"><thead><tr><th>ソース</th><th>対象</th><th>状態</th></tr></thead>
+              <tbody>{data.sources.map((s) => <tr key={s.key}><td className="whitespace-normal">{s.name}</td><td className="text-xs whitespace-normal">{s.targets}</td><td><Tag tone={s.status.startsWith("利用中") || s.status.startsWith("自動") ? "green" : "slate"}>{s.status}</Tag></td></tr>)}</tbody></table></div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button className="btn" disabled={busy} onClick={calendar}>週間カレンダーから市場予想・前回値を取得</button>
+            </div>
+            <details className="text-xs text-muted mt-3">
+              <summary className="cursor-pointer text-slate-300">APIキーの設定方法</summary>
+              <div className="mt-2 space-y-1">
+                <p>プロジェクト直下の <code>.env</code> に設定して <code>docker compose up -d</code> で再起動します（<code>.env.example</code> 参照）。</p>
+                <p><code>ANTHROPIC_API_KEY</code>: AI予測・検証レポートの仮説生成。重要度8以上のイベントは前日・直前に自動でAI予測を作成（<code>AUTO_AI_FORECAST=0</code>で停止）。</p>
+                <p><code>TWELVEDATA_API_KEY</code>: XAUUSD 1分足を発表65分後に自動取得し、自動検証まで実行（無料プランあり）。</p>
+                <p><code>CALENDAR_FEED_ENABLED=1</code>: 週間カレンダーを6時間ごとに取得し、市場予想・前回値を補完。公式日程との時刻不一致は自動変更せず報告します。</p>
+              </div>
+            </details>
           </section>
           <section className="card">
             <div className="card-title">価格データの保有範囲</div>

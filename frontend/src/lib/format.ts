@@ -45,5 +45,5 @@ export const CATEGORY_JA: Record<string, string> = {
 };
 
 export const SOURCE_JA: Record<string, string> = {
-  chatgpt_conversation: "ChatGPT会話記録", manual: "手入力", baseline_stat: "統計ベースライン", external: "外部モデル", llm: "LLM",
+  chatgpt_conversation: "ChatGPT会話記録", manual: "手入力", baseline_stat: "統計ベースライン", external: "外部モデル", llm: "AI（Claude）",
 };

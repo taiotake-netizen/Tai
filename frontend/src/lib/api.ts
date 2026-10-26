@@ -49,6 +49,7 @@ export interface EventSummary {
   id: number; slug: string; title: string; category: string; categories: string[]; release_at: string | null;
   release_time_confirmed: boolean; date_label: string | null; importance: number; status: string; status_ja: string;
   is_composite: boolean; parent_id: number | null; cluster: string | null; origin: string; notes: string | null;
+  schedule_sources: { name: string; url: string }[];
   indicators: Indicator[]; forecast_count: number; latest_forecast: Forecast | null; outcome: Outcome | null;
   report: Report | null; conversation_report: Report | null;
 }

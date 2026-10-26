@@ -70,6 +70,9 @@ class Event(Base):
     cluster: Mapped[str | None] = mapped_column(String(120))  # 同日の関連イベント群
     origin: Mapped[str] = mapped_column(String(40), default="manual")  # conversation|manual|api
     notes: Mapped[str | None] = mapped_column(Text)
+    # 発表スケジュールの根拠 [{"name","url"}]
+    schedule_sources: Mapped[list] = mapped_column(JSON, default=list)
+    schedule_rev: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

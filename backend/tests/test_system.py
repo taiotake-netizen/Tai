@@ -146,6 +146,10 @@ def test_csv_import_and_auto_verification(client, db):
     r = client.post("/api/data/import", files={"file": ("xau.csv", csv, "text/csv")}, data={"symbol": "XAUUSD"})
     assert r.status_code == 200, r.text
     assert r.json()["batch"]["timeframe_min"] == 1
+    assert r.json()["batch"]["rows_inserted"] == 91
+    # 同じCSVの再取込は重複として全件スキップ
+    r2 = client.post("/api/data/import", files={"file": ("xau.csv", csv, "text/csv")}, data={"symbol": "XAUUSD"})
+    assert r2.json()["batch"]["rows_inserted"] == 0 and r2.json()["batch"]["rows_skipped"] == 91
 
     db.expire_all()
     ev = _ev(db, "t-nfp")

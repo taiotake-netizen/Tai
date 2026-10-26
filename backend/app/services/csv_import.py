@@ -76,6 +76,29 @@ def infer_timeframe_min(df: pd.DataFrame) -> int:
     return tf
 
 
+def insert_bars(db: Session, rows: list[dict]) -> int:
+    """重複（同シンボル・時間足・時刻・ソース）は無視して挿入し、追加件数を返す。"""
+    inserted = 0
+    if not rows:
+        return 0
+    if db.bind.dialect.name == "postgresql":
+        for i in range(0, len(rows), 5000):
+            chunk = rows[i : i + 5000]
+            stmt = pg_insert(PriceBar).values(chunk).on_conflict_do_nothing(
+                index_elements=["symbol", "timeframe_min", "ts", "source"]
+            ).returning(PriceBar.id)
+            inserted += len(db.execute(stmt).all())
+        return inserted
+    r0 = rows[0]
+    existing = set(db.scalars(select(PriceBar.ts).where(
+        PriceBar.symbol == r0["symbol"], PriceBar.timeframe_min == r0["timeframe_min"], PriceBar.source == r0["source"])))
+    for r in rows:
+        if r["ts"] not in existing:
+            db.add(PriceBar(**r))
+            inserted += 1
+    return inserted
+
+
 def import_csv(
     db: Session,
     content: bytes,
@@ -107,26 +130,7 @@ def import_csv(
         )
         for r in df.itertuples(index=False)
     ]
-    inserted = 0
-    if db.bind.dialect.name == "postgresql":
-        for i in range(0, len(rows), 5000):
-            chunk = rows[i : i + 5000]
-            stmt = pg_insert(PriceBar).values(chunk).on_conflict_do_nothing(
-                index_elements=["symbol", "timeframe_min", "ts", "source"]
-            )
-            inserted += db.execute(stmt).rowcount or 0
-    else:
-        existing = set(
-            db.scalars(
-                select(PriceBar.ts).where(
-                    PriceBar.symbol == symbol, PriceBar.timeframe_min == tf, PriceBar.source == source
-                )
-            )
-        )
-        for r in rows:
-            if r["ts"] not in existing:
-                db.add(PriceBar(**r))
-                inserted += 1
+    inserted = insert_bars(db, rows)
     batch.rows_inserted = inserted
     batch.rows_skipped = batch.rows_total - inserted
     batch.message = (

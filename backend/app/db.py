@@ -36,6 +36,13 @@ CREATE TRIGGER forecast_versions_immutable
 """
 
 
+# create_all は既存テーブルに列を追加しないため、追加列はここで補う
+_MIGRATIONS = [
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS schedule_sources JSON DEFAULT '[]'",
+    "ALTER TABLE events ADD COLUMN IF NOT EXISTS schedule_rev INTEGER DEFAULT 0",
+]
+
+
 def init_db(bind=None) -> None:
     from . import models  # noqa: F401  (register tables)
 
@@ -43,4 +50,6 @@ def init_db(bind=None) -> None:
     Base.metadata.create_all(bind)
     if bind.dialect.name == "postgresql":
         with bind.begin() as conn:
+            for m in _MIGRATIONS:
+                conn.execute(text(m))
             conn.execute(text(_IMMUTABLE_FORECAST_SQL))

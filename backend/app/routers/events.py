@@ -202,6 +202,40 @@ def add_baseline_forecast(event_id: int, db: Session = Depends(get_db)):
     return S.forecast(fv)
 
 
+@router.post("/events/{event_id}/forecasts/ai", status_code=201)
+def add_ai_forecast(event_id: int, db: Session = Depends(get_db)):
+    from ..services import ai_forecast
+
+    ev = get_event(db, event_id)
+    try:
+        fv = ai_forecast.generate(db, ev, label="AI予測（手動実行）")
+    except ai_forecast.AiUnavailable as e:
+        raise HTTPException(503, {"errors": [str(e)]}) from e
+    except ForecastRejected as e:
+        db.rollback()
+        raise HTTPException(422, {"errors": ["AI予測が整合性チェックを通りませんでした"] + e.errors}) from e
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(502, {"errors": [f"AI予測の作成に失敗しました: {e}"]}) from e
+    db.commit()
+    return S.forecast(fv)
+
+
+@router.post("/events/{event_id}/prices/fetch")
+def fetch_event_prices(event_id: int, db: Session = Depends(get_db)):
+    from ..services import price_feed
+
+    ev = get_event(db, event_id)
+    if ev.release_at is None or ev.release_at > utcnow() - timedelta(minutes=61):
+        raise HTTPException(409, "発表から61分以上経過したイベントのみ取得できます。")
+    try:
+        res = price_feed.fetch_for_event(db, ev)
+    except price_feed.PriceFeedError as e:
+        db.rollback()
+        raise HTTPException(502, str(e)) from e
+    return {**res, "verification": verify_event(db, get_event(db, event_id))}
+
+
 @router.post("/events/{event_id}/verify")
 def verify(event_id: int, db: Session = Depends(get_db)):
     ev = get_event(db, event_id)

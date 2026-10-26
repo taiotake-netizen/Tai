@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import serializers as S
+from ..config import settings
 from ..db import get_db
 from ..models import (
     CATEGORIES, Event, EventStatus, ImportBatch, JobRun, ModelVersion, PriceBar, ResearchReport, utcnow,
@@ -18,15 +19,6 @@ from .events import LOAD
 
 router = APIRouter(prefix="/api", tags=["data"])
 JST = ZoneInfo("Asia/Tokyo")
-
-# 予定しているデータソース。接続していないものは「未接続」と表示し、成功扱いしない。
-DATA_SOURCES = [
-    {"key": "tradingview_csv", "name": "TradingView CSVインポート", "targets": "XAUUSD/DXY/US02Y/US10Y/USOIL", "phase": 1},
-    {"key": "economic_calendar", "name": "経済指標カレンダー自動取得", "targets": "日程・市場予想", "phase": 2},
-    {"key": "official_releases", "name": "公式発表（BLS/BEA/FRB）", "targets": "指標実績", "phase": 2},
-    {"key": "price_api", "name": "価格データAPI（規約適合のもの）", "targets": "XAUUSD/DXY/金利", "phase": 2},
-    {"key": "news", "name": "ニュース取得", "targets": "最新ニュース", "phase": 2},
-]
 
 
 @router.get("/health")
@@ -59,11 +51,21 @@ def data_status(db: Session = Depends(get_db)):
     ).all()
     batches = db.scalars(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(20)).all()
     jobs = db.scalars(select(JobRun).order_by(JobRun.id.desc()).limit(20)).all()
-    sources = []
     have_csv = any(b.status == "success" for b in batches)
-    for s in DATA_SOURCES:
-        status = ("利用中" if have_csv else "未取込") if s["key"] == "tradingview_csv" else "未接続"
-        sources.append({**s, "status": status})
+    sources = [
+        {"key": "tradingview_csv", "name": "TradingView CSVインポート", "targets": "XAUUSD/DXY/US02Y/US10Y/USOIL",
+         "status": "利用中" if have_csv else "未取込"},
+        {"key": "official_schedule", "name": "公式発表スケジュール（FRB/BLS/BEA/Census/ISM/ADPを調査して登録）",
+         "targets": "2026年12月までの日程", "status": "利用中"},
+        {"key": "price_api", "name": "価格データAPI（Twelve Data）", "targets": "XAUUSD 1分足（発表後に自動取得）",
+         "status": "利用中" if settings.twelvedata_api_key and settings.price_fetch_enabled else "未設定（TWELVEDATA_API_KEY）"},
+        {"key": "calendar_feed", "name": "週間カレンダー（市場予想・前回値）", "targets": "今週の米国指標",
+         "status": "自動（6時間ごと）" if settings.calendar_feed_enabled else "手動のみ（CALENDAR_FEED_ENABLED=1で自動）"},
+        {"key": "llm", "name": f"AI予測・分析（{settings.llm_model}）", "targets": "事前予測・検証レポートの仮説",
+         "status": ("利用中・重要指標は前日/直前に自動予測" if settings.auto_ai_forecast else "利用中（手動）")
+         if settings.anthropic_api_key else "未設定（ANTHROPIC_API_KEY）"},
+        {"key": "news", "name": "ニュース取得", "targets": "最新ニュース", "status": "未接続"},
+    ]
     return {
         "coverage": [{"symbol": c[0], "timeframe_min": c[1], "bars": c[2], "first": c[3], "last": c[4]} for c in coverage],
         "batches": [S._cols(b) for b in batches],
@@ -71,6 +73,16 @@ def data_status(db: Session = Depends(get_db)):
         "sources": sources,
         "supported_symbols": sorted(SUPPORTED_SYMBOLS),
     }
+
+
+@router.post("/data/calendar/fetch")
+def calendar_fetch(db: Session = Depends(get_db)):
+    from ..services.calendar_feed import fetch_and_apply
+
+    res = fetch_and_apply(db)
+    if "error" in res:
+        raise HTTPException(502, f"カレンダー取得に失敗しました: {res['error']}")
+    return res
 
 
 @router.post("/jobs/refresh")

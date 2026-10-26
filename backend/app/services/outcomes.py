@@ -30,7 +30,11 @@ def _load_bars(db: Session, symbol: str, tf: int, start: datetime, end: datetime
         )
         .order_by(PriceBar.ts)
     ).all()
-    return {b.ts: b for b in rows}
+    # 同じ時刻に複数ソースがある場合はユーザー取込のCSVを優先する
+    out: dict = {}
+    for b in sorted(rows, key=lambda b: (b.ts, b.source != "tradingview_csv")):
+        out.setdefault(b.ts, b)
+    return out
 
 
 def available_timeframes(db: Session, symbol: str, release_at: datetime) -> list[int]:
@@ -70,6 +74,7 @@ def compute_price_metrics(db: Session, symbol: str, release_at: datetime) -> dic
         return m
     base = base_bar.close
     m["base_price"] = base
+    m["bar_source"] = base_bar.source
     m["base_ts"] = base_bar.ts + timedelta(minutes=tf)
 
     for n in HORIZONS_MIN:
@@ -159,7 +164,7 @@ def upsert_bar_outcome(db: Session, event, metrics: dict) -> Outcome:
         setattr(oc, k, metrics.get(k))
     oc.missing = metrics.get("missing", [])
     oc.verified = is_price_complete(metrics)
-    oc.source = f"インポート価格データ（XAUUSD {metrics.get('timeframe_min')}分足）"
+    oc.source = f"価格データ（XAUUSD {metrics.get('timeframe_min')}分足・{metrics.get('bar_source', '取込')}）"
     oc.related_markets = compute_related_markets(db, event.release_at)
     from ..models import utcnow
 

@@ -13,7 +13,7 @@ interface Home {
   research: { status_counts: Record<string, number>; reports: number; improvements: { event_id: number; text: string }[];
     models: { name: string; version: string; status: string; kind: string }[] };
   data: { coverage: { symbol: string; timeframe_min: number; bars: number; first: string; last: string }[];
-    sources: { key: string; name: string; status: string; phase: number }[]; last_job: { status: string; message: string; finished_at: string } | null };
+    sources: { key: string; name: string; status: string }[]; last_job: { status: string; message: string; finished_at: string } | null };
 }
 
 export default function HomePage() {
@@ -31,7 +31,7 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <CategoryLabel c={n.category} />
                 <StatusBadge status={n.status} label={n.status_ja} />
-                {!n.release_time_confirmed && <Tag tone="red">時刻未確定</Tag>}
+                {n.release_time_confirmed ? <Tag tone="green">公式日程</Tag> : <Tag tone="red">時刻未確定</Tag>}
               </div>
               <Link href={`/events/${n.id}`} className="text-xl sm:text-2xl font-bold hover:text-gold block">{n.title}</Link>
               <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
@@ -133,7 +133,7 @@ export default function HomePage() {
             {data.data.sources.map((s) => (
               <li key={s.key} className="flex justify-between gap-2">
                 <span>{s.name}</span>
-                <Tag tone={s.status === "利用中" ? "green" : s.status === "未接続" ? "slate" : "gold"}>{s.status}{s.phase > 1 ? `（Phase ${s.phase}）` : ""}</Tag>
+                <Tag tone={s.status.startsWith("利用中") || s.status.startsWith("自動") ? "green" : "slate"}>{s.status}</Tag>
               </li>
             ))}
           </ul>
