@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: xau
+      POSTGRES_PASSWORD: xau
+      POSTGRES_DB: xauusd
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xau -d xauusd"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://xau:xau@db:5432/xauusd
+      CORS_ORIGINS: http://localhost:3000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
