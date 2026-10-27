@@ -90,20 +90,23 @@ def et(s: str) -> datetime:
 
 
 def _apply_indicators(db: Session, ev: Event, specs: list[dict]) -> None:
-    by_code = {i.code: i for i in ev.indicators}
+    db.flush()
+    by_code = {i.code: i for i in db.scalars(select(Indicator).where(Indicator.event_id == ev.id))}
     for n, spec in enumerate(specs):
         spec = dict(spec)
         ind = by_code.get(spec["code"])
         if spec.pop("_delete_if_empty", False):
             if ind is not None and ind.actual is None:
                 db.delete(ind)
-                ev.indicators.remove(ind)
+                if ind in ev.indicators:
+                    ev.indicators.remove(ind)
             continue
         if ind is None:
             ind = Indicator(event_id=ev.id, code=spec["code"], name=spec.get("name", spec["code"]),
                             unit=spec.get("unit", ""), sort_order=len(ev.indicators) + n)
             db.add(ind)
             ev.indicators.append(ind)
+            by_code[ind.code] = ind
         for k, v in spec.items():
             if k != "code":
                 setattr(ind, k, v)
@@ -115,14 +118,28 @@ def sync_official_schedule(db: Session) -> dict:
     """公式スケジュール・公式実績をDBへ反映する（REVが上がった分だけ・予測は変更しない）。"""
     from . import official_2026 as O
 
-    updated, created = [], []
+    updated, created, removed, kept = [], [], [], []
     now = utcnow()
+    # 対象外カテゴリの今後の予定を削除（発表済み・予測/実績付きのものは残す）
+    for slug in getattr(O, "REMOVED_SLUGS", []):
+        ev = db.scalar(select(Event).where(Event.slug == slug))
+        if ev is None:
+            continue
+        if ev.release_at and ev.release_at > now and not ev.forecasts and not ev.outcomes and not ev.reports:
+            for ind in list(ev.indicators):
+                db.delete(ind)
+            db.delete(ev)
+            removed.append(slug)
+        else:
+            kept.append(slug)
+    db.flush()
     for slug, spec in O.UPDATES.items():
         ev = db.scalar(select(Event).where(Event.slug == slug))
         if ev is None or ev.schedule_rev >= O.REV:
             continue
-        if "title" in spec:
-            ev.title = spec["title"]
+        for k in ("title", "category", "categories", "is_composite"):
+            if k in spec:
+                setattr(ev, k, spec[k])
         if "release_et" in spec:
             ev.release_at = et(spec["release_et"])
         ev.release_time_confirmed = spec.get("confirmed", ev.release_time_confirmed)
@@ -160,4 +177,7 @@ def sync_official_schedule(db: Session) -> dict:
             make(ch, parent=ev)
         created.append(spec["slug"])
     db.commit()
-    return {"updated": updated, "created": created}
+    out = {"updated": updated, "created": created}
+    if removed or kept:
+        out.update(removed=removed, kept_with_data=kept)
+    return out

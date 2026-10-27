@@ -10,7 +10,7 @@ const dayKey = (iso: string) =>
 
 export default function UpcomingPage() {
   const { data, error, loading } = useApi<EventSummary[]>("/api/events?scope=upcoming");
-  const [minImp, setMinImp] = useState(6);
+  const [minImp, setMinImp] = useState(1);
   const groups = useMemo(() => {
     const g: [string, EventSummary[]][] = [];
     for (const e of (data ?? []).filter((e) => e.importance >= minImp && !e.parent_id)) {

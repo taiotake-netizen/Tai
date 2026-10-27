@@ -5,9 +5,14 @@
   第三者カレンダーや通常パターンのみで確認したものは False とし、source に明記する。
 - 実績値の verified=True は、発表機関の公表値と一致することを確認できたもの。
 - REV を上げると、既存DBのイベントにも差分が適用される（予測バージョンは変更しない）。
+- REV 2: 対象を FOMC・GDP・CPI・雇用統計 に絞った（それ以外の今後の予定は REMOVED_SLUGS で削除）。
+  発表済みの過去イベント（会話由来の研究記録）は削除しない。
 """
 
-REV = 1
+REV = 2
+
+# スケジュール管理の対象（重要度の低い指標は扱わない）
+TRACKED_CATEGORIES = {"FOMC", "GDP", "CPI", "NFP"}
 
 FED = {"name": "FRB FOMC日程", "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
 FED_NOV = {"name": "FRB 2026年11月カレンダー", "url": "https://www.federalreserve.gov/newsevents/2026-november.htm"}
@@ -114,133 +119,91 @@ UPDATES = {
     },
     "fomc-2026-10-presser": {"release_et": "2026-10-28T14:30", "confirmed": True, "sources": [FED]},
     "gdp-pce-2026-10": {
-        "title": "GDP速報値＋PCE＋新規失業保険申請（2026年10月29日）",
-        "release_et": "2026-10-29T08:30", "confirmed": True, "sources": [BEA, CLAIMS_PATTERN],
-        "notes": "BEA: GDP 7-9月期速報値と個人所得・支出（9月分）を同時発表。同時刻に週次失業保険申請（木曜定例）。",
+        "title": "GDP速報値＋PCE（2026年10月29日）",
+        "release_et": "2026-10-29T08:30", "confirmed": True, "sources": [BEA],
+        "notes": "BEA: GDP 7-9月期速報値と個人所得・支出（9月分）を同時発表（価格変動は複合イベントとして分析）。",
         "indicators": [
             {"code": "GDP_QOQ_ANN", "previous": 2.2, "consensus": 3.2, "consensus_source": "Investing.com予想（GDPNow 3.5%、NY連銀 2.67%）"},
             {"code": "CORE_PCE_MOM", "consensus": 0.3, "consensus_source": "Continuum Economics想定（第三者）"},
             {"code": "CORE_PCE_YOY", "previous": 3.0, "consensus": 3.1, "consensus_source": "第三者プレビュー（約3.1%）",
              "notes": "前回値3.0%は第三者集計（未照合）"},
-            {**CLAIMS},
+            {"code": "INITIAL_CLAIMS", "_delete_if_empty": True},
         ],
     },
 }
 
+# REV 1 で作成した対象外カテゴリの今後の予定（予測・実績が付いていなければ削除）
+REMOVED_SLUGS = [
+    "cb-nhs-2026-10-27", "durable-2026-10-27", "eci-2026-q3", "ism-mfg-2026-11", "jolts-2026-11-03", "adp-2026-11",
+    "ism-svc-2026-11", "claims-2026-11-05", "claims-2026-11-12", "retail-2026-11", "fomc-minutes-2026-11",
+    "claims-2026-11-19", "cb-2026-11", "nhs-2026-11-25", "ism-jolts-2026-12-01", "adp-2026-12", "claims-2026-12-03",
+    "ism-svc-2026-12", "retail-2026-12", "claims-2026-12-17", "nhs-2026-12-23",
+]
+
+GDP_PCE_INDICATORS = lambda gdp_name: [  # noqa: E731
+    {"code": "GDP_QOQ_ANN", "name": gdp_name, "unit": "%"},
+    {"code": "PCE_MOM", "name": "PCE総合（前月比）", "unit": "%"},
+    {"code": "CORE_PCE_MOM", "name": "コアPCE（前月比）", "unit": "%"},
+    {"code": "CORE_PCE_YOY", "name": "コアPCE（前年比）", "unit": "%"},
+]
+CPI_INDICATORS = [
+    {"code": "CPI_MOM", "name": "CPI（前月比）", "unit": "%"},
+    {"code": "CPI_YOY", "name": "CPI（前年比）", "unit": "%"},
+    {"code": "CORE_CPI_MOM", "name": "コアCPI（前月比）", "unit": "%"},
+    {"code": "CORE_CPI_YOY", "name": "コアCPI（前年比）", "unit": "%"},
+]
+NFP_INDICATORS = [
+    {"code": "NFP", "name": "非農業部門雇用者数", "unit": "万人"},
+    {"code": "UNRATE", "name": "失業率", "unit": "%"},
+    {"code": "AHE_MOM", "name": "平均時給（前月比）", "unit": "%"},
+]
+
 # ---------------------------------------------------------------- 新規（今後の予定）イベント
+# 価格への影響を分けられないため、GDPと同時刻のPCEは同じ複合イベントの指標として持つ
 NEW_EVENTS = [
-    {"slug": "cb-nhs-2026-10-27", "title": "消費者信頼感指数＋新築住宅販売（2026年10月27日）", "category": "CONSUMER_CONFIDENCE",
-     "categories": ["CONSUMER_CONFIDENCE", "NEW_HOME_SALES"], "is_composite": True,
-     "release_et": "2026-10-27T10:00", "confirmed": False, "importance": 5, "sources": [CENSUS_NRS, CB_PATTERN],
-     "notes": "新築住宅販売（9月分）はCensusの前回リリースで10/27と確認。消費者信頼感は最終火曜10:00 ETの通常日程（公式未確認）。",
-     "indicators": [{"code": "CB_CC", "name": "コンファレンスボード消費者信頼感指数", "unit": ""},
-                    {"code": "NEW_HOME_SALES", "name": "新築住宅販売件数（年率）", "unit": "万件"}]},
-    {"slug": "durable-2026-10-27", "title": "耐久財受注（9月速報）", "category": "DURABLE_GOODS",
-     "release_et": "2026-10-27T08:30", "confirmed": True, "importance": 5, "sources": [CENSUS_DG],
-     "indicators": [{"code": "DGO_MOM", "name": "耐久財受注（前月比）", "unit": "%"},
-                    {"code": "CORE_DGO_MOM", "name": "耐久財受注 除輸送用機器（前月比）", "unit": "%"}]},
-    {"slug": "eci-2026-q3", "title": "雇用コスト指数（7-9月期）", "category": "ECI",
-     "release_et": "2026-10-30T08:30", "confirmed": True, "importance": 6, "sources": [BLS_ECI],
-     "indicators": [{"code": "ECI_QOQ", "name": "雇用コスト指数（前期比）", "unit": "%"}]},
-    {"slug": "ism-mfg-2026-11", "title": "ISM製造業景況指数（10月分）", "category": "ISM",
-     "release_et": "2026-11-02T10:00", "confirmed": True, "importance": 7, "sources": [ISM],
-     "indicators": [{"code": "ISM_PMI", "name": "ISM製造業 総合", "unit": "", "previous": 54.5},
-                    {"code": "ISM_PRICES", "name": "ISM製造業 価格", "unit": "", "previous": 77.9}]},
-    {"slug": "jolts-2026-11-03", "title": "JOLTS求人件数（9月分）", "category": "JOLTS",
-     "release_et": "2026-11-03T10:00", "confirmed": True, "importance": 6, "sources": [BLS_JOLTS],
-     "notes": "同日は米中間選挙の投票日。",
-     "indicators": [{"code": "JOLTS", "name": "JOLTS求人件数", "unit": "万件"}]},
-    {"slug": "adp-2026-11", "title": "ADP雇用統計（10月分）", "category": "ADP",
-     "release_et": "2026-11-04T08:15", "confirmed": True, "importance": 6, "sources": [ADP],
-     "indicators": [{"code": "ADP", "name": "ADP雇用者数", "unit": "万人", "previous": 9.0}]},
-    {"slug": "ism-svc-2026-11", "title": "ISM非製造業景況指数（10月分）", "category": "ISM",
-     "release_et": "2026-11-04T10:00", "confirmed": True, "importance": 6, "sources": [ISM],
-     "indicators": [{"code": "ISM_SVC_PMI", "name": "ISM非製造業 総合", "unit": ""}]},
-    {"slug": "claims-2026-11-05", "title": "新規失業保険申請件数（11月5日）", "category": "JOBLESS_CLAIMS",
-     "release_et": "2026-11-05T08:30", "confirmed": False, "importance": 4, "sources": [CLAIMS_PATTERN], "indicators": [CLAIMS]},
     {"slug": "nfp-2026-11", "title": "米雇用統計 NFP（10月分）", "category": "NFP",
      "release_et": "2026-11-06T08:30", "confirmed": True, "importance": 10, "sources": [BLS_EMP, BLS],
      "notes": "BLS 9月分リリースに次回日程として記載。夏時間終了後のため日本時間22:30。",
-     "indicators": [{"code": "NFP", "name": "非農業部門雇用者数", "unit": "万人", "previous": 2.9},
-                    {"code": "UNRATE", "name": "失業率", "unit": "%", "previous": 4.2},
-                    {"code": "AHE_MOM", "name": "平均時給（前月比）", "unit": "%"}]},
+     "indicators": [{**NFP_INDICATORS[0], "previous": 2.9}, {**NFP_INDICATORS[1], "previous": 4.2}, NFP_INDICATORS[2]]},
     {"slug": "cpi-2026-11", "title": "米消費者物価指数 CPI（10月分）", "category": "CPI",
      "release_et": "2026-11-10T08:30", "confirmed": True, "importance": 10, "sources": [BLS_CPI],
-     "indicators": [{"code": "CPI_MOM", "name": "CPI（前月比）", "unit": "%", "previous": 0.6},
-                    {"code": "CPI_YOY", "name": "CPI（前年比）", "unit": "%", "previous": 3.7},
-                    {"code": "CORE_CPI_MOM", "name": "コアCPI（前月比）", "unit": "%", "previous": 0.3},
-                    {"code": "CORE_CPI_YOY", "name": "コアCPI（前年比）", "unit": "%", "previous": 2.6}]},
-    {"slug": "claims-2026-11-12", "title": "新規失業保険申請件数（11月12日）", "category": "JOBLESS_CLAIMS",
-     "release_et": "2026-11-12T08:30", "confirmed": False, "importance": 4, "sources": [CLAIMS_PATTERN], "indicators": [CLAIMS]},
-    {"slug": "retail-2026-11", "title": "小売売上高（10月分）", "category": "RETAIL_SALES",
-     "release_et": "2026-11-17T08:30", "confirmed": True, "importance": 7, "sources": [CENSUS_RETAIL],
-     "indicators": [{"code": "RETAIL_MOM", "name": "小売売上高（前月比）", "unit": "%"},
-                    {"code": "CORE_RETAIL_MOM", "name": "小売売上高 除自動車（前月比）", "unit": "%"}]},
-    {"slug": "fomc-minutes-2026-11", "title": "FOMC議事要旨（10月27-28日会合分）", "category": "FOMC_MINUTES",
-     "release_et": "2026-11-18T14:00", "confirmed": True, "importance": 6, "sources": [FED_NOV], "indicators": []},
-    {"slug": "claims-2026-11-19", "title": "新規失業保険申請件数（11月19日）", "category": "JOBLESS_CLAIMS",
-     "release_et": "2026-11-19T08:30", "confirmed": False, "importance": 4, "sources": [CLAIMS_PATTERN], "indicators": [CLAIMS]},
-    {"slug": "cb-2026-11", "title": "消費者信頼感指数（11月）", "category": "CONSUMER_CONFIDENCE",
-     "release_et": "2026-11-24T10:00", "confirmed": False, "importance": 5, "sources": [CB_PATTERN],
-     "indicators": [{"code": "CB_CC", "name": "コンファレンスボード消費者信頼感指数", "unit": ""}]},
-    {"slug": "gdp-pce-2026-11-25", "title": "GDP改定値＋PCE（10月分）＋新規失業保険申請（11月25日）", "category": "PCE",
-     "categories": ["PCE", "GDP", "JOBLESS_CLAIMS"], "is_composite": True,
-     "release_et": "2026-11-25T08:30", "confirmed": True, "importance": 9, "sources": [BEA, CLAIMS_PATTERN],
-     "notes": "BEA: 7-9月期GDP改定値と個人所得・支出（10月分）。失業保険申請は感謝祭(11/26)のため水曜に前倒し（第三者カレンダー）。",
-     "indicators": [{"code": "GDP_QOQ_ANN", "name": "GDP改定値（前期比年率）", "unit": "%"},
-                    {"code": "PCE_MOM", "name": "PCE総合（前月比）", "unit": "%"},
-                    {"code": "CORE_PCE_MOM", "name": "コアPCE（前月比）", "unit": "%"},
-                    {"code": "CORE_PCE_YOY", "name": "コアPCE（前年比）", "unit": "%"}, CLAIMS]},
-    {"slug": "nhs-2026-11-25", "title": "新築住宅販売件数（10月分）", "category": "NEW_HOME_SALES",
-     "release_et": "2026-11-25T10:00", "confirmed": False, "importance": 4, "sources": [THIRD],
-     "indicators": [{"code": "NEW_HOME_SALES", "name": "新築住宅販売件数（年率）", "unit": "万件"}]},
-    {"slug": "ism-jolts-2026-12-01", "title": "ISM製造業（11月分）＋JOLTS（10月分）", "category": "ISM",
-     "categories": ["ISM", "JOLTS"], "is_composite": True,
-     "release_et": "2026-12-01T10:00", "confirmed": True, "importance": 7, "sources": [ISM, THIRD],
-     "notes": "ISM製造業はISM公式カレンダーで確認。JOLTSの12/1 10:00は第三者カレンダーのみ（公式未確認）。",
-     "indicators": [{"code": "ISM_PMI", "name": "ISM製造業 総合", "unit": ""},
-                    {"code": "JOLTS", "name": "JOLTS求人件数", "unit": "万件"}]},
-    {"slug": "adp-2026-12", "title": "ADP雇用統計（11月分）", "category": "ADP",
-     "release_et": "2026-12-02T08:15", "confirmed": True, "importance": 6, "sources": [ADP],
-     "indicators": [{"code": "ADP", "name": "ADP雇用者数", "unit": "万人"}]},
-    {"slug": "claims-2026-12-03", "title": "新規失業保険申請件数（12月3日）", "category": "JOBLESS_CLAIMS",
-     "release_et": "2026-12-03T08:30", "confirmed": False, "importance": 4, "sources": [CLAIMS_PATTERN], "indicators": [CLAIMS]},
-    {"slug": "ism-svc-2026-12", "title": "ISM非製造業景況指数（11月分）", "category": "ISM",
-     "release_et": "2026-12-03T10:00", "confirmed": True, "importance": 6, "sources": [ISM],
-     "indicators": [{"code": "ISM_SVC_PMI", "name": "ISM非製造業 総合", "unit": ""}]},
+     "indicators": [{**i, "previous": p} for i, p in zip(CPI_INDICATORS, (0.6, 3.7, 0.3, 2.6))]},
+    {"slug": "gdp-pce-2026-11-25", "title": "GDP改定値＋PCE（10月分）（11月25日）", "category": "GDP",
+     "categories": ["GDP", "PCE"], "is_composite": True,
+     "release_et": "2026-11-25T08:30", "confirmed": True, "importance": 9, "sources": [BEA],
+     "notes": "BEA: 7-9月期GDP改定値と個人所得・支出（10月分）を同時発表。",
+     "indicators": GDP_PCE_INDICATORS("GDP改定値（前期比年率）")},
     {"slug": "nfp-2026-12", "title": "米雇用統計 NFP（11月分）", "category": "NFP",
      "release_et": "2026-12-04T08:30", "confirmed": False, "importance": 10, "sources": [THIRD],
-     "notes": "第三者カレンダーで12/4。BLS公式スケジュールで要確認。",
-     "indicators": [{"code": "NFP", "name": "非農業部門雇用者数", "unit": "万人"},
-                    {"code": "UNRATE", "name": "失業率", "unit": "%"},
-                    {"code": "AHE_MOM", "name": "平均時給（前月比）", "unit": "%"}]},
+     "notes": "第三者カレンダーで12/4。BLS公式スケジュールで要確認。", "indicators": NFP_INDICATORS},
     {"slug": "fomc-2026-12", "title": "FOMC 政策金利・声明（2026年12月・SEP）", "category": "FOMC",
      "release_et": "2026-12-09T14:00", "confirmed": True, "importance": 10, "sources": [FED],
      "notes": "12月8-9日会合（経済見通しSEPあり）。声明14:00 ET＝日本時間12/10 04:00。",
      "indicators": [FFR],
      "children": [{"slug": "fomc-2026-12-presser", "title": "FRB議長会見（2026年12月）", "release_et": "2026-12-09T14:30",
                    "importance": 9}]},
-    {"slug": "cpi-2026-12", "title": "米CPI（11月分）＋新規失業保険申請（12月10日）", "category": "CPI",
-     "categories": ["CPI", "JOBLESS_CLAIMS"], "is_composite": True,
-     "release_et": "2026-12-10T08:30", "confirmed": True, "importance": 10, "sources": [BLS_CPI, CLAIMS_PATTERN],
-     "indicators": [{"code": "CPI_MOM", "name": "CPI（前月比）", "unit": "%"},
-                    {"code": "CPI_YOY", "name": "CPI（前年比）", "unit": "%"},
-                    {"code": "CORE_CPI_MOM", "name": "コアCPI（前月比）", "unit": "%"},
-                    {"code": "CORE_CPI_YOY", "name": "コアCPI（前年比）", "unit": "%"}, CLAIMS]},
-    {"slug": "retail-2026-12", "title": "小売売上高（11月分）", "category": "RETAIL_SALES",
-     "release_et": "2026-12-16T08:30", "confirmed": True, "importance": 7, "sources": [CENSUS_RETAIL],
-     "indicators": [{"code": "RETAIL_MOM", "name": "小売売上高（前月比）", "unit": "%"},
-                    {"code": "CORE_RETAIL_MOM", "name": "小売売上高 除自動車（前月比）", "unit": "%"}]},
-    {"slug": "claims-2026-12-17", "title": "新規失業保険申請件数（12月17日）", "category": "JOBLESS_CLAIMS",
-     "release_et": "2026-12-17T08:30", "confirmed": False, "importance": 4, "sources": [CLAIMS_PATTERN], "indicators": [CLAIMS]},
-    {"slug": "gdp-pce-2026-12-23", "title": "GDP確定値＋PCE（11月分）（12月23日）", "category": "PCE",
-     "categories": ["PCE", "GDP"], "is_composite": True,
+    {"slug": "cpi-2026-12", "title": "米消費者物価指数 CPI（11月分）", "category": "CPI",
+     "release_et": "2026-12-10T08:30", "confirmed": True, "importance": 10, "sources": [BLS_CPI],
+     "indicators": CPI_INDICATORS},
+    {"slug": "gdp-pce-2026-12-23", "title": "GDP確定値＋PCE（11月分）（12月23日）", "category": "GDP",
+     "categories": ["GDP", "PCE"], "is_composite": True,
      "release_et": "2026-12-23T08:30", "confirmed": True, "importance": 8, "sources": [BEA],
-     "indicators": [{"code": "GDP_QOQ_ANN", "name": "GDP確定値（前期比年率）", "unit": "%"},
-                    {"code": "PCE_MOM", "name": "PCE総合（前月比）", "unit": "%"},
-                    {"code": "CORE_PCE_MOM", "name": "コアPCE（前月比）", "unit": "%"},
-                    {"code": "CORE_PCE_YOY", "name": "コアPCE（前年比）", "unit": "%"}]},
-    {"slug": "nhs-2026-12-23", "title": "新築住宅販売件数（11月分）", "category": "NEW_HOME_SALES",
-     "release_et": "2026-12-23T10:00", "confirmed": True, "importance": 4, "sources": [CENSUS_SOC],
-     "indicators": [{"code": "NEW_HOME_SALES", "name": "新築住宅販売件数（年率）", "unit": "万件"}]},
+     "indicators": GDP_PCE_INDICATORS("GDP確定値（前期比年率）")},
 ]
+
+# REV 1 で作成済みのイベントを REV 2 の内容に合わせる
+UPDATES.update({
+    "gdp-pce-2026-11-25": {
+        "title": "GDP改定値＋PCE（10月分）（11月25日）", "category": "GDP", "categories": ["GDP", "PCE"],
+        "release_et": "2026-11-25T08:30", "confirmed": True, "sources": [BEA],
+        "notes": "BEA: 7-9月期GDP改定値と個人所得・支出（10月分）を同時発表。",
+        "indicators": [{"code": "INITIAL_CLAIMS", "_delete_if_empty": True}],
+    },
+    "gdp-pce-2026-12-23": {"category": "GDP", "categories": ["GDP", "PCE"], "release_et": "2026-12-23T08:30",
+                           "confirmed": True, "sources": [BEA]},
+    "cpi-2026-12": {
+        "title": "米消費者物価指数 CPI（11月分）", "categories": ["CPI"], "is_composite": False,
+        "release_et": "2026-12-10T08:30", "confirmed": True, "sources": [BLS_CPI],
+        "indicators": [{"code": "INITIAL_CLAIMS", "_delete_if_empty": True}],
+    },
+})

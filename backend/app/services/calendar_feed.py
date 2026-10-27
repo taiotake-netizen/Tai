@@ -2,7 +2,8 @@
 
 - 対象は USD の指標のみ。既存イベント（発表時刻±2分）の指標に市場予想・前回値を補完する。
 - 公式スケジュールと時刻が食い違う場合は自動変更せず、「時刻不一致」として報告する。
-- 公式スケジュールに無い高重要度の指標は、未確認（release_time_confirmed=False）のイベントとして追加する。
+- 対象は FOMC・GDP・CPI・雇用統計（GDPと同時発表のPCEは補完のみ）。それ以外の指標は無視する。
+- 公式スケジュールに無い高重要度の対象指標は、未確認（release_time_confirmed=False）のイベントとして追加する。
 """
 
 import re
@@ -16,6 +17,10 @@ from ..config import settings
 from ..models import Event, EventStatus, Indicator, JobRun, utcnow
 
 SOURCE_NAME = "Forex Factory週間カレンダー"
+
+# 管理対象（FOMC・GDP・CPI・雇用統計）。PCEはGDPと同時発表される複合イベントの指標としてのみ補完する
+TRACKED = {"FOMC", "GDP", "CPI", "NFP"}
+SUPPLEMENT_ONLY = {"PCE"}
 
 # (正規表現, カテゴリ, 指標コード, 指標名, 単位)
 MAPPING = [
@@ -89,6 +94,9 @@ def apply_feed(db: Session, items: list[dict], now: datetime | None = None) -> d
             skipped += 1
             continue
         cat, code, name, unit = mp
+        if cat not in TRACKED | SUPPLEMENT_ONLY:
+            skipped += 1
+            continue
         try:
             ts = datetime.fromisoformat(it["date"])
         except (KeyError, ValueError):
@@ -102,7 +110,7 @@ def apply_feed(db: Session, items: list[dict], now: datetime | None = None) -> d
                 mismatches.append({"title": it.get("title"), "feed_time": ts.isoformat(), "event_id": near.id,
                                    "event_time": near.release_at.isoformat()})
                 continue
-            if it.get("impact") != "High" or ts <= now:
+            if cat not in TRACKED or it.get("impact") != "High" or ts <= now:
                 continue
             ev = Event(slug=f"feed-{code.lower()}-{ts.strftime('%Y%m%d%H%M')}", title=f"{name}（{ts.strftime('%m/%d')}）",
                        category=cat, categories=[cat], release_at=ts, release_time_confirmed=False, importance=7,

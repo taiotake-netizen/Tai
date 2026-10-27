@@ -38,6 +38,34 @@ def test_official_schedule_times_and_verified_actuals(db):
     # 会話由来の予測バージョンは変更されない
     assert [f.d5 for f in _ev(db, "fomc-2026-10").forecasts] == [-12, -20, -12]
     assert _ev(db, "nfp-2026-12").release_time_confirmed is False
+    # 今後の予定は FOMC・GDP・CPI・雇用統計のみ
+    upcoming = db.scalars(select(Event).where(Event.release_at > utcnow())).all()
+    assert {e.category for e in upcoming} <= {"FOMC", "GDP", "CPI", "NFP"}
+    assert all(i.code != "INITIAL_CLAIMS" for e in upcoming for i in e.indicators)
+
+
+def test_rev1_low_priority_events_are_removed(db):
+    """REV 1 で登録された対象外の今後の予定は削除し、予測が付いたものは残す。"""
+    from app.models import ForecastVersion, Indicator
+
+    seed(db)
+    sync_official_schedule(db)
+    rel = utcnow() + timedelta(days=5)
+    db.add(Event(slug="eci-2026-q3", title="ECI", category="ECI", release_at=rel, schedule_rev=1))
+    keep = Event(slug="adp-2026-11", title="ADP", category="ADP", release_at=rel, schedule_rev=1)
+    db.add(keep)
+    db.flush()
+    db.add(Indicator(event_id=keep.id, code="ADP", name="ADP"))
+    db.add(ForecastVersion(event_id=keep.id, version_no=1, source="manual", model_name="manual", model_version="1"))
+    gdp = _ev(db, "gdp-pce-2026-11-25")
+    gdp.schedule_rev, gdp.category = 1, "PCE"
+    db.add(Indicator(event_id=gdp.id, code="INITIAL_CLAIMS", name="claims"))
+    db.commit()
+    r = sync_official_schedule(db)
+    assert r["removed"] == ["eci-2026-q3"] and r["kept_with_data"] == ["adp-2026-11"]
+    db.expire_all()
+    gdp = _ev(db, "gdp-pce-2026-11-25")
+    assert gdp.category == "GDP" and all(i.code != "INITIAL_CLAIMS" for i in gdp.indicators)
 
 
 def _bars_payload(release, path):
@@ -103,20 +131,25 @@ def test_calendar_feed_apply(db):
          "impact": "High", "forecast": "65K", "previous": "29K"},
         {"title": "Unemployment Rate", "country": "USD", "date": "2026-11-06T08:30:00-05:00",
          "impact": "High", "forecast": "4.2%", "previous": "4.2%"},
-        {"title": "JOLTS Job Openings", "country": "USD", "date": "2026-11-03T10:00:00-05:00",
+        {"title": "Core PCE Price Index m/m", "country": "USD", "date": "2026-11-25T08:30:00-05:00",
+         "impact": "High", "forecast": "0.2%", "previous": "0.3%"},
+        {"title": "CPI m/m", "country": "USD", "date": "2026-11-11T08:30:00-05:00",  # 公式は11/10
+         "impact": "High", "forecast": "0.3%", "previous": "0.6%"},
+        {"title": "JOLTS Job Openings", "country": "USD", "date": "2026-11-03T10:00:00-05:00",  # 対象外
          "impact": "High", "forecast": "7.15M", "previous": "7.20M"},
-        {"title": "Retail Sales m/m", "country": "USD", "date": "2026-11-18T08:30:00-05:00",  # 公式は11/17
-         "impact": "High", "forecast": "0.4%", "previous": "0.6%"},
+        {"title": "Unemployment Claims", "country": "USD", "date": "2026-11-05T08:30:00-05:00",  # 対象外
+         "impact": "High", "forecast": "225K", "previous": "220K"},
         {"title": "German Ifo", "country": "EUR", "date": "2026-11-03T04:00:00-05:00", "impact": "High"},
     ]
     res = calendar_feed.apply_feed(db, items)
     nfp = {i.code: i for i in _ev(db, "nfp-2026-11").indicators}
     assert nfp["NFP"].consensus == 6.5 and nfp["NFP"].previous == 2.9  # 既存の前回値は上書きしない
     assert nfp["UNRATE"].consensus == 4.2
-    jolts = {i.code: i for i in _ev(db, "jolts-2026-11-03").indicators}
-    assert jolts["JOLTS"].consensus == 715 and jolts["JOLTS"].previous == 720
-    assert len(res["time_mismatches"]) == 1 and res["time_mismatches"][0]["title"] == "Retail Sales m/m"
-    assert res["created"] == []
+    pce = {i.code: i for i in _ev(db, "gdp-pce-2026-11-25").indicators}
+    assert pce["CORE_PCE_MOM"].consensus == 0.2 and pce["CORE_PCE_MOM"].previous == 0.3
+    assert len(res["time_mismatches"]) == 1 and res["time_mismatches"][0]["title"] == "CPI m/m"
+    assert res["created"] == []  # 対象外の指標はイベントを作らない
+    assert db.scalar(select(Event).where(Event.category.in_(["JOLTS", "JOBLESS_CLAIMS"]))) is None
 
 
 class FakeClient:
