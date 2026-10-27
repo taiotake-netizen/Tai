@@ -30,9 +30,10 @@ def _load_bars(db: Session, symbol: str, tf: int, start: datetime, end: datetime
         )
         .order_by(PriceBar.ts)
     ).all()
-    # 同じ時刻に複数ソースがある場合はユーザー取込のCSVを優先する
+    # 同じ時刻に複数ソースがある場合は TradingView CSV → Dukascopy CSV → API の順に優先する
     out: dict = {}
-    for b in sorted(rows, key=lambda b: (b.ts, b.source != "tradingview_csv")):
+    prio = {"tradingview_csv": 0, "dukascopy_csv": 1}
+    for b in sorted(rows, key=lambda b: (b.ts, prio.get(b.source, 2))):
         out.setdefault(b.ts, b)
     return out
 

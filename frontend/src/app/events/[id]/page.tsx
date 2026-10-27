@@ -129,7 +129,8 @@ function EvalTable({ ev, evals }: { ev: EventDetail; evals: Evaluation[] }) {
                     return (
                       <tr key={e.id} className="num align-top">
                         <td>Ver.{f.version_no}<div className="text-[10px] text-muted">{f.label}</div></td>
-                        <td>{m.direction ? <span className={m.direction.hit ? "text-up" : "text-down"}>{m.direction.hit ? "的中" : "外れ"}<div className="text-[10px] text-muted">{dirJa(m.direction.pred)}→{dirJa(m.direction.actual)}</div></span> : "—"}</td>
+                        <td>{m.direction ? <span className={m.direction.hit ? "text-up" : "text-down"}>{m.direction.hit ? "的中" : "外れ"}<div className="text-[10px] text-muted">{dirJa(m.direction.pred)}→{dirJa(m.direction.actual)}（5分後）</div></span>
+                          : m.direction_observed ? <span className="text-muted">{m.direction_observed.hit ? "一致" : "不一致"}<div className="text-[10px]">参考・時間幅不明</div></span> : "—"}</td>
                         <td>{m.brier_direction ?? "—"}</td>
                         <td>{errCell("d1")}</td><td>{errCell("d5")}</td><td>{errCell("d30")}</td>
                         <td>{m.max_excursion_5m ? <>{usd(m.max_excursion_5m.error)}<div className="text-[10px] text-muted">{m.excursion_bias}</div></> : "—"}</td>

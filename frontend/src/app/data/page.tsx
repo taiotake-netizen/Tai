@@ -14,22 +14,29 @@ interface Status {
 
 export default function DataPage() {
   const { data, error, loading, reload } = useApi<Status>("/api/data/status");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [eventsOnly, setEventsOnly] = useState(true);
   const [symbol, setSymbol] = useState("XAUUSD");
   const [tz, setTz] = useState("UTC");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function upload() {
-    if (!file) return;
+    if (!files.length) return;
     setBusy(true); setMsg(null);
-    const fd = new FormData();
-    fd.append("file", file); fd.append("symbol", symbol); fd.append("assumed_tz", tz);
-    try {
-      const r = await api<any>("/api/data/import", { method: "POST", body: fd });
-      setMsg(`${r.batch.message}。検証完了: ${r.refresh.verified.length}件`);
-    } catch (e) { setMsg("取込失敗: " + errorText(e)); }
-    finally { setBusy(false); reload(); }
+    const lines: string[] = [];
+    for (const [i, file] of files.entries()) {
+      setMsg(`取込中 ${i + 1}/${files.length}: ${file.name}`);
+      const fd = new FormData();
+      fd.append("file", file); fd.append("symbol", symbol); fd.append("assumed_tz", tz);
+      fd.append("events_only", String(eventsOnly));
+      try {
+        const r = await api<any>("/api/data/import", { method: "POST", body: fd });
+        lines.push(`✓ ${file.name}: ${r.batch.message}。検証完了 ${r.refresh.verified.length}件`);
+      } catch (e) { lines.push(`✗ ${file.name}: ${errorText(e)}`); }
+    }
+    setMsg(lines.join("\n"));
+    setBusy(false); reload();
   }
   async function calendar() {
     setBusy(true); setMsg(null);
@@ -49,17 +56,19 @@ export default function DataPage() {
     <div className="space-y-4">
       <h1 className="text-lg font-bold">データ取得</h1>
       <section className="card space-y-3">
-        <div className="card-title">TradingView CSVインポート</div>
-        <p className="text-xs text-muted">TradingViewの「チャートデータをエクスポート」で出力したCSV（time,open,high,low,close,…）を取り込みます。1分足を推奨（初動・反転の判定に必要）。time列がタイムゾーンなしの日時の場合は、その前提タイムゾーンを指定してください（UNIX時刻ならUTC固定）。取込後、発表済みイベントの自動検証が実行されます。</p>
+        <div className="card-title">価格CSVインポート（TradingView / Dukascopy）</div>
+        <p className="text-xs text-muted">TradingViewの「チャートデータをエクスポート」のCSVと、Dukascopyのヒストリカルデータ（Gmt time / Local time形式）を取り込めます。形式は自動で判定します。1分足を推奨します（初動・反転の判定に必要）。複数ファイルを選ぶと順番に取り込みます。取込後、発表済みイベントの自動検証が実行されます。</p>
         <div className="grid sm:grid-cols-4 gap-3 items-end">
-          <label className="block sm:col-span-2"><span className="label">CSVファイル</span><input type="file" accept=".csv,text/csv" className="input" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+          <label className="block sm:col-span-2"><span className="label">CSVファイル（複数可）</span><input id="csv-files" type="file" multiple accept=".csv,text/csv" className="input" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} /></label>
           <label className="block"><span className="label">シンボル</span>
             <select className="input" value={symbol} onChange={(e) => setSymbol(e.target.value)}>{(data?.supported_symbols ?? ["XAUUSD"]).map((s) => <option key={s}>{s}</option>)}</select></label>
           <label className="block"><span className="label">タイムゾーン前提</span>
             <select className="input" value={tz} onChange={(e) => setTz(e.target.value)}>{["UTC", "Asia/Tokyo", "America/New_York", "Europe/London"].map((s) => <option key={s}>{s}</option>)}</select></label>
         </div>
+        <label className="text-sm flex items-center gap-2"><input id="events-only" type="checkbox" checked={eventsOnly} onChange={(e) => setEventsOnly(e.target.checked)} />
+          登録済みイベントの発表前後3時間だけを保存する（数年分のファイルを取り込むときに推奨）</label>
         <div className="flex gap-2">
-          <button className="btn btn-gold" disabled={!file || busy} onClick={upload}>{busy ? "処理中…" : "インポート"}</button>
+          <button className="btn btn-gold" disabled={!files.length || busy} onClick={upload}>{busy ? "処理中…" : "インポート"}</button>
           <button className="btn" disabled={busy} onClick={refresh}>ステータス更新・自動検証を実行</button>
         </div>
         {msg && <div className="text-sm text-sky-300 whitespace-pre-wrap">{msg}</div>}

@@ -56,9 +56,9 @@ export default function HomePage() {
         <section className="card">
           <div className="card-title">過去の予測精度</div>
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="方向正答率（確定）" value={pct(data.accuracy.confirmed.direction_accuracy)} sub={`n=${data.accuracy.confirmed.direction_n}`} />
+            <Stat label="方向正答率（確定・5分後）" value={pct(data.accuracy.confirmed.direction_accuracy)} sub={`n=${data.accuracy.confirmed.direction_n}`} />
             <Stat label="5分後MAE（確定）" value={data.accuracy.confirmed.d5_mae ?? "—"} sub={`ドル n=${data.accuracy.confirmed.d5_n}`} />
-            <Stat label="方向正答率（暫定）" value={pct(data.accuracy.tentative.direction_accuracy)} sub={`会話記録 n=${data.accuracy.tentative.direction_n}`} />
+            <Stat label="方向正答率（暫定・5分後）" value={pct(data.accuracy.tentative.direction_accuracy)} sub={`会話記録 n=${data.accuracy.tentative.direction_n}`} />
             <Stat label="5分後MAE（暫定）" value={data.accuracy.tentative.d5_mae ?? "—"} sub={`ドル n=${data.accuracy.tentative.d5_n}`} />
           </div>
           <p className="text-[11px] text-muted mt-2">確定＝価格データで検証済み。暫定＝会話由来の未照合記録（参考値）。</p>

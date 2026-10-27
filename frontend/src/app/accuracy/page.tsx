@@ -3,7 +3,8 @@ import Link from "next/link";
 import { CATEGORY_JA, fmtJst, pct } from "@/lib/format";
 import { Loading, Stat, Tag, useApi } from "@/components/ui";
 
-interface Sum { n_evaluations: number; direction_n: number; direction_accuracy: number | null; d5_mae: number | null; d5_n: number;
+interface Sum { direction_basis?: string; direction_by_horizon?: Record<string, { n: number; accuracy: number | null }>;
+  direction_observed_reference?: { n: number; hits: number }; n_evaluations: number; direction_n: number; direction_accuracy: number | null; d5_mae: number | null; d5_n: number;
   d30_mae: number | null; max_excursion_mae: number | null; max_excursion_n: number; indicator_mae: number | null; indicator_n: number;
   brier_reach: number | null; brier_direction: number | null }
 interface Block { overall: Sum; by_category: Record<string, Sum>; by_model: Record<string, Sum>; calibration: { bin: string; n: number; mean_prob: number; hit_rate: number }[] }
@@ -16,7 +17,7 @@ function SumTable({ rows }: { rows: Record<string, Sum> }) {
   if (!keys.length) return <div className="text-sm text-muted">データなし</div>;
   return (
     <div className="overflow-x-auto"><table className="tbl">
-      <thead><tr><th></th><th>評価数</th><th>方向正答率</th><th>5分後MAE</th><th>30分後MAE</th><th>最大変動幅MAE</th><th>指標数値MAE</th><th>Brier(到達)</th><th>Brier(方向)</th></tr></thead>
+      <thead><tr><th></th><th>評価数</th><th>方向正答率(5分)</th><th>5分後MAE</th><th>30分後MAE</th><th>最大変動幅MAE</th><th>指標数値MAE</th><th>Brier(到達)</th><th>Brier(方向)</th></tr></thead>
       <tbody>{keys.map((k) => { const s = rows[k]; return (
         <tr key={k} className="num"><td>{CATEGORY_JA[k] ?? k}</td><td>{s.n_evaluations}</td><td>{pct(s.direction_accuracy)} <span className="text-muted text-[10px]">n={s.direction_n}</span></td>
           <td>{s.d5_mae ?? "—"}</td><td>{s.d30_mae ?? "—"}</td><td>{s.max_excursion_mae ?? "—"}</td><td>{s.indicator_mae ?? "—"}</td><td>{s.brier_reach ?? "—"}</td><td>{s.brier_direction ?? "—"}</td></tr>); })}</tbody>
@@ -30,13 +31,22 @@ function BlockView({ b, title, tone }: { b: Block; title: string; tone: "green" 
     <section className="card space-y-4">
       <div className="card-title"><Tag tone={tone}>{title}</Tag></div>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        <Stat label="方向予測の正答率" value={pct(o.direction_accuracy)} sub={`n=${o.direction_n}`} />
+        <Stat label="方向正答率（5分後基準）" value={pct(o.direction_accuracy)} sub={`n=${o.direction_n}`} />
         <Stat label="5分後終着地MAE" value={o.d5_mae ?? "—"} sub={`ドル n=${o.d5_n}`} />
         <Stat label="最大変動幅MAE" value={o.max_excursion_mae ?? "—"} sub={`ドル n=${o.max_excursion_n}`} />
         <Stat label="指標数値の予測誤差" value={o.indicator_mae ?? "—"} sub={`MAE n=${o.indicator_n}`} />
         <Stat label="到達確率Brier" value={o.brier_reach ?? "—"} sub="0に近いほど良い" />
         <Stat label="方向確率Brier" value={o.brier_direction ?? "—"} sub="3クラス" />
         <Stat label="評価数" value={o.n_evaluations} sub="主評価=最終版" />
+      </div>
+      <div>
+        <div className="text-xs font-semibold mb-1">時間幅別の方向正答率</div>
+        <div className="overflow-x-auto"><table className="tbl">
+          <thead><tr>{["1", "5", "15", "30", "60"].map((n) => <th key={n}>{n}分後</th>)}</tr></thead>
+          <tbody><tr className="num">{["1", "5", "15", "30", "60"].map((n) => { const h = o.direction_by_horizon?.[n]; return <td key={n}>{pct(h?.accuracy)} <span className="text-[10px] text-muted">n={h?.n ?? 0}</span></td>; })}</tr></tbody>
+        </table></div>
+        <p className="text-[11px] text-muted mt-1">判定: 発表直前価格からの各時点の価格差。{o.direction_basis ?? ""}。予測の「短期優勢方向」を各時点の実際の方向と比較しています。
+          {o.direction_observed_reference && o.direction_observed_reference.n > 0 && ` 時間幅不明の記録との比較 ${o.direction_observed_reference.hits}/${o.direction_observed_reference.n} 件一致（参考・正答率に含めない）。`}</p>
       </div>
       <div><div className="text-xs font-semibold mb-1">指標別の成績</div><SumTable rows={b.by_category} /></div>
       <div><div className="text-xs font-semibold mb-1">モデル別の成績</div><SumTable rows={b.by_model} /></div>

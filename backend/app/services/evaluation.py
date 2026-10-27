@@ -4,7 +4,7 @@
 comparable=False として別扱いにする。
 """
 
-from ..config import HORIZONS_MIN, REACH_THRESHOLDS
+from ..config import HORIZONS_MIN, REACH_THRESHOLDS, settings
 from ..models import Event, ForecastVersion, Outcome
 
 DIRS = ("up", "down", "flat")
@@ -39,16 +39,28 @@ def evaluate(event: Event, f: ForecastVersion, o: Outcome) -> tuple[dict, list[s
     notes: list[str] = []
 
     # --- 方向
+    # 正答率に使うのは5分後終着地の方向のみ（主評価）。他の時間幅は direction_by_horizon に別記録し、
+    # 時間幅不明の観測方向は direction_observed として参考扱い（正答率に含めない）。
     pred_dir = f.dominant_direction
-    if o.direction_5m:
-        actual_dir, basis = o.direction_5m, "5分後終着地"
-    elif o.observed_direction:
-        actual_dir, basis = o.observed_direction, "観測方向（時間幅不明）"
-        notes.append("実際の方向は時間幅が不明な記録に基づく暫定判定です。")
-    else:
-        actual_dir, basis = None, None
-    if pred_dir and actual_dir:
-        m["direction"] = {"pred": pred_dir, "actual": actual_dir, "hit": pred_dir == actual_dir, "basis": basis}
+    band = settings.flat_band_usd
+    if pred_dir:
+        by_h = {}
+        for n in HORIZONS_MIN:
+            v = getattr(o, f"d{n}")
+            if v is None:
+                continue
+            actual = "up" if v > band else "down" if v < -band else "flat"
+            by_h[str(n)] = {"pred": pred_dir, "actual": actual, "hit": pred_dir == actual}
+        if by_h:
+            m["direction_by_horizon"] = by_h
+        if o.direction_5m:
+            m["direction"] = {"pred": pred_dir, "actual": o.direction_5m, "hit": pred_dir == o.direction_5m,
+                              "basis": "5分後終着地"}
+        elif o.observed_direction:
+            m["direction_observed"] = {"pred": pred_dir, "actual": o.observed_direction,
+                                       "hit": pred_dir == o.observed_direction, "basis": "観測方向（時間幅不明）",
+                                       "comparable": False}
+            notes.append("実際の方向は時間幅が不明な記録しかないため参考比較のみとし、方向正答率には含めません。")
     if o.direction_5m and None not in (f.prob_up, f.prob_down, f.prob_flat):
         p = {"up": f.prob_up / 100, "down": f.prob_down / 100, "flat": f.prob_flat / 100}
         m["brier_direction"] = round(sum((p[d] - (1.0 if d == o.direction_5m else 0.0)) ** 2 for d in DIRS), 4)

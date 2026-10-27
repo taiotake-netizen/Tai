@@ -29,13 +29,14 @@ def health(db: Session = Depends(get_db)):
 
 @router.post("/data/import")
 async def import_prices(file: UploadFile = File(...), symbol: str = Form("XAUUSD"), assumed_tz: str = Form("UTC"),
-                        db: Session = Depends(get_db)):
+                        events_only: bool = Form(False), db: Session = Depends(get_db)):
     content = await file.read()
     try:
-        batch = import_csv(db, content, file.filename or "upload.csv", symbol=symbol, assumed_tz=assumed_tz)
+        batch = import_csv(db, content, file.filename or "upload.csv", symbol=symbol, assumed_tz=assumed_tz,
+                           events_only=events_only)
     except CsvImportError as e:
         db.rollback()
-        db.add(ImportBatch(filename=file.filename or "upload.csv", symbol=symbol.upper(), source="tradingview_csv",
+        db.add(ImportBatch(filename=file.filename or "upload.csv", symbol=symbol.upper(), source="csv",
                            assumed_tz=assumed_tz, status="failed", message=str(e)))
         db.commit()
         raise HTTPException(422, str(e)) from e
@@ -52,9 +53,12 @@ def data_status(db: Session = Depends(get_db)):
     batches = db.scalars(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(20)).all()
     jobs = db.scalars(select(JobRun).order_by(JobRun.id.desc()).limit(20)).all()
     have_csv = any(b.status == "success" for b in batches)
+    have_dukas = any(b.status == "success" and b.source == "dukascopy_csv" for b in batches)
     sources = [
         {"key": "tradingview_csv", "name": "TradingView CSVインポート", "targets": "XAUUSD/DXY/US02Y/US10Y/USOIL",
          "status": "利用中" if have_csv else "未取込"},
+        {"key": "dukascopy_csv", "name": "Dukascopy ヒストリカルCSV（過去分の一括取込）", "targets": "XAUUSD 1分足（数年分）",
+         "status": "利用中" if have_dukas else "未取込"},
         {"key": "official_schedule", "name": "公式発表スケジュール（FRB/BLS/BEA/Census/ISM/ADPを調査して登録）",
          "targets": "2026年12月までの日程", "status": "利用中"},
         {"key": "price_api", "name": "価格データAPI（Twelve Data）", "targets": "XAUUSD 1分足（発表後に自動取得）",

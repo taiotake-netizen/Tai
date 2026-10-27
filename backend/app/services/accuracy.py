@@ -5,6 +5,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from ..config import settings
 from ..models import Evaluation, Event, ForecastVersion
 
 
@@ -16,7 +17,15 @@ def _mean(xs):
 def _summarize(evals: list[Evaluation]) -> dict:
     dir_hits = [e.metrics["direction"]["hit"] for e in evals if "direction" in e.metrics]
     ind_err = [r["abs_error"] for e in evals for r in e.metrics.get("indicators", [])]
+    by_h = {}
+    for n in ("1", "5", "15", "30", "60"):
+        hits = [e.metrics["direction_by_horizon"][n]["hit"] for e in evals if n in e.metrics.get("direction_by_horizon", {})]
+        by_h[n] = {"n": len(hits), "accuracy": round(sum(hits) / len(hits) * 100, 1) if hits else None}
+    obs = [e.metrics["direction_observed"]["hit"] for e in evals if "direction_observed" in e.metrics]
     return {
+        "direction_basis": "5分後終着地（±{:.0f}ドル以内は横ばい）".format(settings.flat_band_usd),
+        "direction_by_horizon": by_h,
+        "direction_observed_reference": {"n": len(obs), "hits": sum(obs)},
         "n_evaluations": len(evals),
         "direction_n": len(dir_hits),
         "direction_accuracy": round(sum(dir_hits) / len(dir_hits) * 100, 1) if dir_hits else None,
@@ -85,6 +94,7 @@ def accuracy_dashboard(db: Session) -> dict:
             "label": e.forecast.label, "model": f"{e.forecast.model_name} v{e.forecast.model_version}",
             "verified": e.outcome.verified, "outcome_kind": e.outcome.kind,
             "direction_hit": e.metrics.get("direction", {}).get("hit"),
+            "direction_observed_hit": e.metrics.get("direction_observed", {}).get("hit"),
             "d5_abs_error": e.metrics.get("d5", {}).get("abs_error"),
             "excursion_abs_error": e.metrics.get("max_excursion_5m", {}).get("abs_error"),
             "brier_reach": e.metrics.get("brier_reach_mean"),

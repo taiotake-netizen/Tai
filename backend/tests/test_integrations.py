@@ -205,3 +205,84 @@ def test_ai_unavailable_without_key(db, client):
     ev = client.get("/api/events?scope=upcoming").json()[0]
     r = client.post(f"/api/events/{ev['id']}/forecasts/ai")
     assert r.status_code == 503 and "ANTHROPIC_API_KEY" in r.text
+
+
+# ---------------------------------------------------------------- Dukascopy CSV・時間幅別の方向評価
+
+def _dukas_csv(release, path, local_offset=None):
+    """Dukascopy形式（Gmt time または Local time）のテスト用CSV。"""
+    lines = ["Gmt time,Open,High,Low,Close,Volume" if local_offset is None else "Local time,Open,High,Low,Close,Volume"]
+    t0 = release - timedelta(minutes=30)
+    for i in range(100):
+        ts = t0 + timedelta(minutes=i)
+        k = i - 30
+        o = h = l = c = 4000.0
+        if 0 <= k < len(path):
+            o, h, l, c = path[k]
+        elif k >= len(path):
+            o = h = l = c = path[-1][3]
+        vol = 10 if k >= -30 else 0
+        if local_offset is None:
+            stamp = ts.strftime("%d.%m.%Y %H:%M:%S.000")
+        else:
+            lt = ts + timedelta(hours=local_offset)
+            stamp = lt.strftime("%d.%m.%Y %H:%M:%S.000") + f" GMT+{local_offset:02d}00"
+        lines.append(f"{stamp},{o},{h},{l},{c},{vol}")
+    # 休場時の埋め草行（出来高0・四本値同一）
+    lines.append((t0 - timedelta(days=2)).strftime("%d.%m.%Y %H:%M:%S.000") + ",3990,3990,3990,3990,0")
+    return "\n".join(lines).encode()
+
+
+@pytest.mark.parametrize("offset", [None, 9])
+def test_dukascopy_import_and_horizon_direction(client, db, offset):
+    from app.models import ForecastVersion
+
+    release = (utcnow() - timedelta(hours=4)).replace(second=0, microsecond=0)
+    ev = Event(slug="dk", title="Dukascopyテスト", category="CPI", release_at=release, status=EventStatus.AWAITING_DATA)
+    db.add(ev)
+    db.commit()
+    db.add(ForecastVersion(event_id=ev.id, version_no=1, source="manual", model_name="manual", model_version="1",
+                           created_at=release - timedelta(hours=1), prob_up=60, prob_down=30, prob_flat=10,
+                           dominant_direction="up", d5=5))
+    db.commit()
+    # 1分後は上昇(+8)、5分後は下落(-6)
+    path = [(4000, 4010, 3999, 4008), (4008, 4009, 3996, 3998), (3998, 3999, 3992, 3995), (3995, 3997, 3993, 3994),
+            (3994, 3996, 3993, 3994)]
+    r = client.post("/api/data/import", files={"file": ("XAUUSD_1m.csv", _dukas_csv(release, path, offset), "text/csv")},
+                    data={"symbol": "XAUUSD", "events_only": "true"})
+    assert r.status_code == 200, r.text
+    b = r.json()["batch"]
+    assert b["source"] == "dukascopy_csv" and b["timeframe_min"] == 1
+    assert "Dukascopy" in b["message"] and b["rows_skipped"] >= 1  # 埋め草行は除外
+    db.expire_all()
+    oc = db.scalar(select(Outcome).where(Outcome.event_id == ev.id, Outcome.kind == "price_bars"))
+    assert oc.base_price == 4000 and oc.d1 == 8 and oc.d5 == -6
+    from app.models import Evaluation
+    m = db.scalar(select(Evaluation).where(Evaluation.outcome_id == oc.id)).metrics
+    assert m["direction"]["hit"] is False and m["direction"]["basis"] == "5分後終着地"
+    assert m["direction_by_horizon"]["1"]["hit"] is True and m["direction_by_horizon"]["5"]["hit"] is False
+    acc = client.get("/api/accuracy").json()["confirmed"]["overall"]
+    assert acc["direction_by_horizon"]["1"] == {"n": 1, "accuracy": 100.0}
+    assert acc["direction_by_horizon"]["5"] == {"n": 1, "accuracy": 0.0}
+
+
+def test_observed_direction_excluded_from_accuracy(db):
+    seed(db)
+    from app.services.pipeline import refresh_statuses
+    from app.services.accuracy import accuracy_dashboard
+
+    refresh_statuses(db, use_llm=False)
+    t = accuracy_dashboard(db)["tentative"]["overall"]
+    # 5分後で判定できるのは CPI の1件のみ。時間幅不明のFOMC(9月)・議事要旨は参考扱い
+    assert t["direction_n"] == 1 and t["direction_accuracy"] == 100.0
+    assert t["direction_observed_reference"] == {"n": 2, "hits": 1}
+
+
+def test_dukascopy_node_timestamp_format(client):
+    """npx dukascopy-cli -f csv の出力（timestamp=UNIXミリ秒）"""
+    t0 = 1730000000000
+    rows = "\n".join(f"{t0 + i * 60000},4000,4001,3999,4000.5,12.5" for i in range(10))
+    r = client.post("/api/data/import", files={"file": ("xauusd-m1.csv", ("timestamp,open,high,low,close,volume\n" + rows).encode(),
+                                                        "text/csv")}, data={"symbol": "XAUUSD"})
+    assert r.status_code == 200, r.text
+    assert r.json()["batch"]["source"] == "dukascopy_csv" and r.json()["batch"]["rows_inserted"] == 10

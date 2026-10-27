@@ -77,6 +77,11 @@ def rule_based_analysis(event: Event, outcome: Outcome, evals: list[Evaluation])
         imps.append("最大変動幅と終着地を別モデルで予測し、往復（初動→反転）の確率を明示する。")
 
     d = mm.get("direction")
+    d_obs = mm.get("direction_observed")
+    if d_obs and not d:
+        hyps.append({"text": f"方向は予測{DIR_JA[d_obs['pred']]}・観測{DIR_JA[d_obs['actual']]}"
+                     f"（時間幅不明のため参考。正答率には含めない）。", "basis": "direction_observed"})
+        imps.append("1分足で5分後の方向を確定させ、正式な方向評価に含める。")
     if d:
         if d["hit"]:
             hyps.append({"text": f"方向（{DIR_JA[d['pred']]}）は的中（判定基準: {d['basis']}）。", "basis": "direction"})
@@ -143,7 +148,9 @@ def rule_based_analysis(event: Event, outcome: Outcome, evals: list[Evaluation])
 
     summary_parts = []
     if d:
-        summary_parts.append(f"方向{'的中' if d['hit'] else '外れ'}")
+        summary_parts.append(f"方向（5分後）{'的中' if d['hit'] else '外れ'}")
+    elif d_obs:
+        summary_parts.append(f"方向{'一致' if d_obs['hit'] else '不一致'}（時間幅不明・参考）")
     if "d5" in mm:
         summary_parts.append(f"5分後誤差{mm['d5']['error']:+.1f}ドル")
     if "max_excursion_5m" in mm:
