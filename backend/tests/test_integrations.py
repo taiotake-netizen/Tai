@@ -286,3 +286,25 @@ def test_dukascopy_node_timestamp_format(client):
                                                         "text/csv")}, data={"symbol": "XAUUSD"})
     assert r.status_code == 200, r.text
     assert r.json()["batch"]["source"] == "dukascopy_csv" and r.json()["batch"]["rows_inserted"] == 10
+
+
+def test_history_two_years(db):
+    from app.seed.loader import sync_history
+
+    seed(db)
+    sync_official_schedule(db)
+    r = sync_history(db)
+    assert r["created"] == 15 + 22 + 22 + 7
+    assert sync_history(db) == {"created": 0}
+    jst = lambda slug: _ev(db, slug).release_at.astimezone(JST).strftime("%Y/%m/%d %H:%M")  # noqa: E731
+    assert jst("hist-fomc-20241107") == "2024/11/08 04:00"   # 冬時間 14:00 EST
+    assert jst("hist-gdp-20250730") == "2025/07/30 21:30"    # 夏時間 8:30 EDT
+    assert jst("hist-cpi-20251024") == "2025/10/24 21:30"
+    # 期間中の各カテゴリに重複がない（会話由来の2026年9月以降のイベントと重ならない）
+    hist = db.scalars(select(Event).where(Event.origin == "history")).all()
+    assert max(e.release_at for e in hist) < _ev(db, "fomc-2026-09").release_at
+    assert {e.category for e in hist} == {"FOMC", "CPI", "NFP", "GDP"}
+    may = {i.code: i for i in _ev(db, "hist-nfp-20250606").indicators}
+    assert (may["NFP"].actual, may["NFP"].actual_verified) == (13.9, True)
+    # 確認できなかった値は空欄のまま
+    assert all(i.actual is None for i in _ev(db, "hist-cpi-20250410").indicators)

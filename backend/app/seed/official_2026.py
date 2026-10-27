@@ -5,11 +5,12 @@
   第三者カレンダーや通常パターンのみで確認したものは False とし、source に明記する。
 - 実績値の verified=True は、発表機関の公表値と一致することを確認できたもの。
 - REV を上げると、既存DBのイベントにも差分が適用される（予測バージョンは変更しない）。
+- REV 3: GDP 4-6月期確定値が9/30発表であることを確認（備考更新）。
 - REV 2: 対象を FOMC・GDP・CPI・雇用統計 に絞った（それ以外の今後の予定は REMOVED_SLUGS で削除）。
   発表済みの過去イベント（会話由来の研究記録）は削除しない。
 """
 
-REV = 2
+REV = 3
 
 # スケジュール管理の対象（重要度の低い指標は扱わない）
 TRACKED_CATEGORIES = {"FOMC", "GDP", "CPI", "NFP"}
@@ -61,7 +62,7 @@ UPDATES = {
              "actual_source": "BEA Personal Income and Outlays, August 2026（PCE +1,908億ドル, +0.9%）"},
             {"code": "GDP_RELATED", "name": "GDP（4-6月期確定値・前期比年率）", "actual": 2.2, "actual_verified": True,
              "actual_source": "BEA GDP (Third Estimate), 2nd Quarter 2026",
-             "notes": "会話記録の「GDP関連+2.2%」はQ2確定値と一致。PCEと同日発表かは要確認。"},
+             "notes": "会話記録の「GDP関連+2.2%」はQ2確定値と一致。BEAによると確定値も9月30日発表（PCEと同日）。"},
         ],
     },
     "nfp-2026-10": {

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import type { EventSummary } from "@/lib/api";
 import { fmtJst, usd } from "@/lib/format";
 import { CategoryLabel, Dir, Loading, StatusBadge, Tag, useApi } from "@/components/ui";
@@ -10,10 +11,21 @@ function err(p: number | null | undefined, a: number | null | undefined) {
 
 export default function PastPage() {
   const { data, error, loading } = useApi<EventSummary[]>("/api/events?scope=past");
+  const [cat, setCat] = useState("ALL");
+  const [onlyRecorded, setOnlyRecorded] = useState(false);
+  const rows = (data ?? []).filter((e) => (cat === "ALL" || e.category === cat || e.categories.includes(cat))
+    && (!onlyRecorded || e.forecast_count > 0 || e.outcome != null));
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold">過去の経済指標</h1>
-      <p className="text-xs text-muted">会話由来の記録は公式データとの照合前のため「未検証」です。最大変動幅（5分間）と終着地（5分後）は別項目として表示しています。</p>
+      <p className="text-xs text-muted">会話由来の記録は公式データとの照合前のため「未検証」です。最大変動幅（5分間）と終着地（5分後）は別項目として表示しています。2024年11月以降のFOMC・CPI・雇用統計・GDP速報値も登録済みで、1分足を取り込むと値動きが計算されます。</p>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {[["ALL", "すべて"], ["FOMC", "FOMC"], ["CPI", "CPI"], ["NFP", "雇用統計"], ["GDP", "GDP"]].map(([k, l]) => (
+          <button key={k} className={`btn ${cat === k ? "border-gold text-gold" : ""}`} onClick={() => setCat(k)}>{l}</button>
+        ))}
+        <label className="flex items-center gap-1 text-xs ml-2"><input id="only-recorded" type="checkbox" checked={onlyRecorded} onChange={(e) => setOnlyRecorded(e.target.checked)} />予測か値動きの記録があるものだけ</label>
+        <span className="text-xs text-muted ml-auto">{rows.length}件</span>
+      </div>
       {!data ? <Loading error={error} loading={loading} /> : (
         <div className="card p-0 overflow-x-auto">
           <table className="tbl">
@@ -25,7 +37,7 @@ export default function PastPage() {
               </tr>
             </thead>
             <tbody>
-              {data.map((e) => {
+              {rows.map((e) => {
                 const f = e.latest_forecast;
                 const o = e.outcome;
                 const rep = e.report ?? e.conversation_report;

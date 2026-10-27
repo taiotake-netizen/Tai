@@ -181,3 +181,27 @@ def sync_official_schedule(db: Session) -> dict:
     if removed or kept:
         out.update(removed=removed, kept_with_data=kept)
     return out
+
+
+def sync_history(db: Session) -> dict:
+    """過去2年分の FOMC・CPI・雇用統計・GDP速報値を登録する（既存のイベントは変更しない）。"""
+    from . import history_2024_2026 as H
+
+    created = []
+    now = utcnow()
+    for spec in H.build_events():
+        if db.scalar(select(Event).where(Event.slug == spec["slug"])):
+            continue
+        rel = et(spec["release_et"])
+        ev = Event(
+            slug=spec["slug"], title=spec["title"], category=spec["category"], categories=[spec["category"]],
+            release_at=rel, release_time_confirmed=spec["confirmed"], importance=spec["importance"],
+            origin="history", notes=spec.get("notes"), schedule_sources=spec.get("sources", []), schedule_rev=0,
+            status=EventStatus.UPCOMING if rel > now else EventStatus.AWAITING_DATA,
+        )
+        db.add(ev)
+        db.flush()
+        _apply_indicators(db, ev, spec["indicators"])
+        created.append(spec["slug"])
+    db.commit()
+    return {"created": len(created)}

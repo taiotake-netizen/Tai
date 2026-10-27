@@ -2,7 +2,7 @@
 import sys
 
 from .db import SessionLocal, init_db
-from .seed.loader import seed, sync_official_schedule
+from .seed.loader import seed, sync_history, sync_official_schedule
 from .services.pipeline import refresh_statuses
 
 if __name__ == "__main__":
@@ -12,5 +12,6 @@ if __name__ == "__main__":
         if cmd in ("init", "seed"):
             print(seed(db))
             print(sync_official_schedule(db))
+            print(sync_history(db))
         if cmd in ("init", "refresh"):
             print(refresh_statuses(db))

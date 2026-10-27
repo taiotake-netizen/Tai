@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .db import SessionLocal, init_db
 from .routers import data, events
-from .seed.loader import seed, sync_official_schedule
+from .seed.loader import seed, sync_history, sync_official_schedule
 from .models import utcnow
 from .services.ai_forecast import auto_generate_due
 from .services.calendar_feed import fetch_and_apply
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
         with SessionLocal() as db:
             seed(db)
             sync_official_schedule(db)
+            sync_history(db)
     with SessionLocal() as db:
         refresh_statuses(db)
     scheduler = None
