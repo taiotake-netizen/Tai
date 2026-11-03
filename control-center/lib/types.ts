@@ -33,6 +33,14 @@ export type Overview = {
   attention: { kind: "post" | "job"; id: number; status: string; message: string | null; updated_at: string }[];
   job_stats_24h?: Record<string, { succeeded: number; failed: number; running: number; queued: number }>;
   activity_24h?: number[];
+  pipeline?: {
+    post_counts: Record<string, number>;
+    generation_checks: { passed: number; rejected: number; errors: number };
+    metrics_by_bucket: Record<string, number>;
+    ideas_added: number;
+    analysis_samples: number;
+    audit_entries: number;
+  };
   generated_at: string;
 };
 

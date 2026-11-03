@@ -147,6 +147,21 @@ def overview(ctx: Ctx, account_id: str) -> dict:
         h = int((base - parse(r["finished_at"])).total_seconds() // 3600)
         if 0 <= h < 24:
             hourly[23 - h] += 1
+    post_counts = {r["status"]: r["c"] for r in conn.execute(
+        "SELECT status, COUNT(*) c FROM posts WHERE account_id=? AND is_test=? AND (status IN"
+        " ('planned','generating','awaiting_approval','scheduled','publishing','unknown') OR updated_at>=?) GROUP BY status",
+        (account_id, test, since24))}
+    checks = {r["outcome"]: r["c"] for r in conn.execute(
+        "SELECT a.outcome, COUNT(*) c FROM post_attempts a JOIN posts p ON p.id=a.post_id WHERE p.account_id=?"
+        " AND a.kind='generate' AND a.created_at>=? GROUP BY a.outcome", (account_id, since24))}
+    metrics_by_bucket = {r["bucket_hours"]: r["c"] for r in conn.execute(
+        "SELECT bucket_hours, COUNT(*) c FROM metrics WHERE account_id=? AND is_test=? AND status='ok' AND observed_at>=?"
+        " GROUP BY bucket_hours", (account_id, test, since24))}
+    ideas_new = conn.execute("SELECT COUNT(*) c FROM ideas WHERE account_id=? AND created_at>=? AND origin IN ('ai_refill','derived')",
+                             (account_id, since24)).fetchone()["c"]
+    samples = conn.execute("SELECT COUNT(*) c FROM metrics m JOIN posts p ON p.id=m.post_id WHERE m.account_id=? AND m.is_test=?"
+                           " AND m.status='ok' AND m.bucket_hours=?", (account_id, test, s.improvement.primary_bucket_hours)).fetchone()["c"]
+    audit_24h = conn.execute("SELECT COUNT(*) c FROM audit_log WHERE account_id=? AND created_at>=?", (account_id, since24)).fetchone()["c"]
     pol = active_policy(conn, account_id)
     exp = conn.execute("SELECT id, variable, control_value, treatment_value, hypothesis, started_at FROM experiments"
                        " WHERE account_id=? AND status='running'", (account_id,)).fetchone()
@@ -180,5 +195,14 @@ def overview(ctx: Ctx, account_id: str) -> dict:
         "attention": attention,
         "job_stats_24h": job_stats,          # per job kind: succeeded/failed in last 24h, running/queued now
         "activity_24h": hourly,              # succeeded jobs per hour, oldest → newest
+        "pipeline": {                        # detail for the org chart (24h unless noted)
+            "post_counts": post_counts,      # current upcoming statuses + statuses changed in 24h
+            "generation_checks": {"passed": checks.get("ok", 0), "rejected": checks.get("rejected", 0),
+                                  "errors": checks.get("error", 0)},
+            "metrics_by_bucket": {str(k): v for k, v in metrics_by_bucket.items()},
+            "ideas_added": ideas_new,
+            "analysis_samples": samples,     # all-time comparable samples at the primary bucket
+            "audit_entries": audit_24h,
+        },
         "generated_at": iso(now()),
     }

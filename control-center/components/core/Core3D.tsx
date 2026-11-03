@@ -9,6 +9,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { CoreVisual } from "@/lib/coreState";
+import { Cage, Disk, Lattice, Meridians, Seed, Synapses } from "./CoreParts";
 
 /* eslint-disable react-hooks/immutability -- three.js objects (uniforms, materials, meshes) are mutated imperatively
    inside useFrame by design; React never renders from these values. */
@@ -82,7 +83,7 @@ function Nucleus({ u }: { u: Uniforms }) {
         vec3 col = base * fres * (0.8 + uIntensity) + vec3(0.85,0.97,1.0) * inner * (0.25 + uIntensity*0.6)
                  + core * bands * 0.05 * uIntensity;
         col = mix(col, vec3(dot(col, vec3(0.3,0.5,0.2)))*0.6, uDim);
-        float a = clamp(0.08 + fres*0.85 + inner*0.5, 0.0, 1.0) * (1.0 - uDim*0.5);
+        float a = clamp(0.04 + fres*0.8 + inner*0.22, 0.0, 1.0) * (1.0 - uDim*0.5);
         gl_FragColor = vec4(col, a);
       }`,
   }), [u]);
@@ -336,9 +337,15 @@ function Scene({ visual, pulseKey, quality, reducedMotion }: Props) {
   return (
     <group ref={group}>
       <Dust count={quality === "low" ? 150 : 400} />
+      <Disk u={u.shell} count={quality === "high" ? 2600 : quality === "mid" ? 1500 : 600} />
       <Orbits u={u} live={live} />
+      <Cage u={u.shell} />
       <Shell u={u} count={shellCount} />
+      <Synapses u={u.shell} count={quality === "low" ? 14 : 30} />
       <Nucleus u={u} />
+      <Lattice u={u.shell} />
+      <Meridians u={u.shell} />
+      <Seed u={u.shell} />
       <Ripple u={u} />
     </group>
   );

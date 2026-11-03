@@ -118,10 +118,13 @@ def test_jobs_listing_labels(ctx, account):
 def test_overview_activity_counts(ctx, account):
     from threads_ops.api_views import overview
     seed_ideas(ctx)
-    for _ in range(24 * 4):
+    for _ in range(48 * 4):
         scheduler.tick(ctx)
         drain(ctx)
         advance(minutes=15)
     o = overview(ctx, "acc")
     assert len(o["activity_24h"]) == 24 and sum(o["activity_24h"]) > 0
     assert o["job_stats_24h"]["publish_post"]["succeeded"] >= 1
+    pl = o["pipeline"]
+    assert pl["generation_checks"]["passed"] >= 1 and pl["analysis_samples"] >= 0
+    assert "24" in pl["metrics_by_bucket"]

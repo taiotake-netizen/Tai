@@ -88,8 +88,9 @@ export function CoreHud({ c }: { c: ConsoleState }) {
   const ticks = Array.from({ length: 72 }, (_, i) => i);
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden>
-      <svg className="absolute left-1/2 top-1/2 h-[118%] max-h-[540px] -translate-x-1/2 -translate-y-1/2" viewBox="-200 -200 400 400" style={{ aspectRatio: "1" }}>
-        <g className="hud-spin" opacity="0.85">
+      <div className="absolute left-1/2 top-1/2 aspect-square h-[112%] max-h-[520px] -translate-x-1/2 -translate-y-1/2">
+      <svg className="h-full w-full" viewBox="-200 -200 400 400">
+        <g className="hud-spin" opacity="0.85" style={{ transformOrigin: "0px 0px" }}>
           <circle r="182" fill="none" stroke={tone} strokeOpacity="0.28" />
           {ticks.map((i) => {
             const a = (i / 72) * Math.PI * 2, long = i % 6 === 0;
@@ -97,12 +98,13 @@ export function CoreHud({ c }: { c: ConsoleState }) {
               stroke={tone} strokeOpacity={long ? 0.55 : 0.25} strokeWidth={long ? 1.2 : 0.8} />;
           })}
         </g>
-        <g className="hud-spin-rev" opacity="0.9">
+        <g className="hud-spin-rev" opacity="0.9" style={{ transformOrigin: "0px 0px" }}>
           <circle r="162" fill="none" stroke={tone} strokeOpacity="0.22" strokeDasharray="2 10" />
           <path d="M -162 0 A 162 162 0 0 1 -114.5 -114.5" fill="none" stroke={tone} strokeWidth="2" strokeOpacity="0.6" />
           <path d="M 162 0 A 162 162 0 0 1 114.5 114.5" fill="none" stroke={tone} strokeWidth="2" strokeOpacity="0.6" />
         </g>
       </svg>
+      </div>
       <dl className="hud absolute bottom-3 left-4 grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-[10px] text-muted">
         <dt>QUEUE</dt><dd className="num text-text">{fmtNum(queued)}</dd>
         <dt>ACTIVE</dt><dd className="num text-text">{fmtNum(running)}</dd>
