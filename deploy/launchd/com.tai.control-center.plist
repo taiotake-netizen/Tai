@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- AI CONTROL CENTER（npm run build 済みであること）
+     Replace __REPO__ with the absolute path of this repository, then:
+       cp com.tai.control-center.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/com.tai.control-center.plist
+     Secrets are read from the project's .env file, not from this plist. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.tai.control-center</string>
+  <key>WorkingDirectory</key><string>__REPO__/control-center</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>npm</string>
+    <string>run</string>
+    <string>start</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>__REPO__/control-center/data/web.log</string>
+  <key>StandardErrorPath</key><string>__REPO__/control-center/data/web.log</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>

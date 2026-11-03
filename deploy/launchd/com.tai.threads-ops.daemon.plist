@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- スケジューラー＋ワーカー（投稿・実績取得・分析・レポート）
+     Replace __REPO__ with the absolute path of this repository, then:
+       cp com.tai.threads-ops.daemon.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/com.tai.threads-ops.daemon.plist
+     Secrets are read from the project's .env file, not from this plist. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.tai.threads-ops.daemon</string>
+  <key>WorkingDirectory</key><string>__REPO__/threads-automation</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>uv</string>
+    <string>run</string>
+    <string>python</string>
+    <string>-m</string>
+    <string>threads_ops</string>
+    <string>run</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>__REPO__/threads-automation/data/daemon.log</string>
+  <key>StandardErrorPath</key><string>__REPO__/threads-automation/data/daemon.log</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>

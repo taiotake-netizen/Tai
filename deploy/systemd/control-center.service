@@ -1,0 +1,15 @@
+[Unit]
+Description=AI CONTROL CENTER
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/tai/control-center
+ExecStart=/usr/bin/env npm run start
+Restart=always
+RestartSec=10
+# secrets: put them in control-center/.env (threads-automation) or an EnvironmentFile readable only by this user
+EnvironmentFile=/opt/tai/control-center/.env.local
+User=tai
+
+[Install]
+WantedBy=multi-user.target

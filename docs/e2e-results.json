@@ -1,0 +1,137 @@
+[
+  {
+    "name": "unauthenticated API is rejected",
+    "ok": true,
+    "detail": "status 401"
+  },
+  {
+    "name": "login without same-origin headers is rejected (CSRF)",
+    "ok": true,
+    "detail": "status 403"
+  },
+  {
+    "name": "dashboard renders with demo badge",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "3D canvas mounted",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "agent cards present",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "desktop: no horizontal scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "other account blocked for demo session",
+    "ok": true,
+    "detail": "status 404"
+  },
+  {
+    "name": "path traversal blocked",
+    "ok": true,
+    "detail": "status 404"
+  },
+  {
+    "name": "write without CSRF header rejected",
+    "ok": true,
+    "detail": "status 403"
+  },
+  {
+    "name": "keyboard focus moves to interactive elements",
+    "ok": true,
+    "detail": "BUTTON"
+  },
+  {
+    "name": "agent card selectable (aria-pressed)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "dry-run publish visible in activity feed",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "drawer ネタ opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "drawer 改善 opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "drawer レポート opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "drawer AI補助 opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "drawer 設定 opens",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "idea edit persists across reload",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "settings update conflict detected",
+    "ok": true,
+    "detail": "200,409"
+  },
+  {
+    "name": "disconnected state shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "recovers after reconnect",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no unexpected console errors (desktop)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: no horizontal scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: 3D core is compact",
+    "ok": true,
+    "detail": "h=176"
+  },
+  {
+    "name": "reduced motion: page works",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no WebGL: fallback shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no WebGL: console still usable",
+    "ok": true,
+    "detail": ""
+  }
+]

@@ -1,0 +1,15 @@
+[Unit]
+Description=Threads ops API
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/tai/threads-automation
+ExecStart=/usr/bin/env uv run python -m threads_ops api --host 127.0.0.1 --port 8787
+Restart=always
+RestartSec=10
+# secrets: put them in threads-automation/.env (threads-automation) or an EnvironmentFile readable only by this user
+
+User=tai
+
+[Install]
+WantedBy=multi-user.target
