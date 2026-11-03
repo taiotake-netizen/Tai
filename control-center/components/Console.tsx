@@ -9,9 +9,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, sessionApi } from "@/lib/client/api";
 import { useConsole, type ConsoleState } from "@/lib/client/useConsole";
 import { CORE_LABEL } from "@/lib/coreState";
-import { AGENT_STATE, fmtNum, fmtPct, fmtRelative, fmtTime, fmtUsd, JOB_STATUS, POST_STATUS, type Tone } from "@/lib/format";
+import { AGENT_STATE, kindLabel, fmtNum, fmtPct, fmtRelative, fmtTime, fmtUsd, JOB_STATUS, POST_STATUS, type Tone } from "@/lib/format";
 import type { Agent, EventItem, Job, Post } from "@/lib/types";
 import { CoreStage } from "./core/CoreStage";
+import { CoreHud, HudStrip } from "./Hud";
+import { OrgChart } from "./OrgChart";
 import { AssistantDrawer } from "./drawers/AssistantDrawer";
 import { IdeasDrawer } from "./drawers/IdeasDrawer";
 import { ImprovementDrawer } from "./drawers/ImprovementDrawer";
@@ -60,6 +62,7 @@ export function Console() {
   return (
     <div className="mx-auto max-w-[1600px] px-3 pb-10 sm:px-4">
       <Header c={c} onOpen={setDrawer} />
+      <HudStrip c={c} />
       {c.error && !c.overview && (
         <div className="mb-3"><ErrorNote>{c.error}</ErrorNote></div>
       )}
@@ -76,6 +79,7 @@ export function Console() {
         </div>
       </main>
       <div className="mt-3 grid gap-3">
+        <OrgChart c={c} />
         <KpiRow c={c} />
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <PostsPanel c={c} onOpen={(id) => setDrawer(`post:${id}`)} />
@@ -132,11 +136,12 @@ function Header({ c, onOpen }: { c: ConsoleState; onOpen: (k: DrawerKey) => void
   return (
     <header className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="grid size-8 place-items-center rounded-lg border border-accent/40 bg-accent/10" aria-hidden>
-          <Activity className="size-4 text-accent" />
+        <span className="relative grid size-9 place-items-center" aria-hidden>
+          <svg viewBox="0 0 36 36" className="absolute inset-0"><polygon points="18,1.5 32.3,9.75 32.3,26.25 18,34.5 3.7,26.25 3.7,9.75" fill="rgb(0 217 255 / 0.08)" stroke="#00D9FF" strokeOpacity="0.7" /></svg>
+          <Activity className="relative size-4 text-accent" />
         </span>
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold tracking-[0.22em] text-text">AI CONTROL CENTER</h1>
+          <h1 className="hud text-[15px] font-semibold tracking-[0.3em] text-text [text-shadow:0_0_16px_rgba(0,217,255,0.35)]">AI CONTROL CENTER</h1>
           <p className="truncate text-[11px] text-muted">{c.overview?.account.display_name ?? c.account ?? ""}</p>
         </div>
       </div>
@@ -213,7 +218,7 @@ function AgentCard({ a, selected, onSelect }: { a: Agent; selected: boolean; onS
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px]">
           <dt className="text-muted">接続</dt><dd className="truncate">{a.tool ?? "—"}</dd>
           <dt className="text-muted">待機</dt><dd className="num">{a.queued}件</dd>
-          {a.running[0] && (<><dt className="text-muted">処理</dt><dd className="truncate">#{a.running[0].id} {a.running[0].kind}</dd></>)}
+          {a.running[0] && (<><dt className="text-muted">処理</dt><dd className="truncate">#{a.running[0].id} {kindLabel(a.running[0].kind)}</dd></>)}
         </dl>
         {a.reason && <p className="mt-1.5 text-[11px] text-warn">{a.reason}</p>}
         {a.state === "error" && a.last?.last_error && <p className="mt-1 line-clamp-2 text-[11px] text-error">{a.last.last_error}</p>}
@@ -239,20 +244,23 @@ function CorePanel({ c, act, askConfirm }: { c: ConsoleState; act: Act; askConfi
   const canWrite = c.session?.role === "admin";
   return (
     <section className="panel relative overflow-hidden" aria-label="AIコアと現在の処理">
-      <CoreStage visual={c.core} pulseKey={c.pulse?.id ?? null} compact={compact} />
+      <div className="relative">
+        <CoreStage visual={c.core} pulseKey={c.pulse?.id ?? null} compact={compact} />
+        {!compact && <CoreHud c={c} />}
+      </div>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
         <div>
-          <p className="panel-title">{sel ? sel.name : "全体"}</p>
-          <p className="mt-0.5 text-lg font-medium tracking-wide" aria-live="polite">{CORE_LABEL[c.core]}</p>
+          <p className="panel-title">{sel ? sel.name : "AI CORE · 全体"}</p>
+          <p className="mt-1 text-xl font-medium tracking-wide [text-shadow:0_0_18px_rgba(0,217,255,0.45)]" aria-live="polite">{CORE_LABEL[c.core]}</p>
+          {c.selected && <span className="pointer-events-auto mt-1 inline-block"><Button variant="ghost" className="-ml-3 text-xs" onClick={() => c.setSelected(null)}>全体表示に戻す</Button></span>}
         </div>
-        {c.selected && <span className="pointer-events-auto"><Button variant="ghost" className="text-xs" onClick={() => c.setSelected(null)}>全体表示に戻す</Button></span>}
       </div>
       <div className="relative border-t border-line/70 bg-[#07111f]/70 p-4 backdrop-blur-sm">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-0 space-y-1 text-sm">
             <p className="panel-title">現在の処理</p>
             {!o ? <p className="text-muted">—</p> : running.length ? running.slice(0, 3).map((r) => (
-              <p key={r.id} className="truncate"><span className="text-accent">●</span> {r.agent}：{r.kind}（#{r.id}・{fmtRelative(r.started_at)}開始）</p>
+              <p key={r.id} className="truncate"><span className="text-accent">●</span> {r.agent}：{kindLabel(r.kind)}（#{r.id}・{fmtRelative(r.started_at)}開始）</p>
             )) : (
               <p className="text-muted">
                 処理中のジョブはありません。次の投稿 <span className="num text-text">{fmtTime(o.next.next_post?.slot_at)}</span>
@@ -346,9 +354,10 @@ function KpiRow({ c }: { c: ConsoleState }) {
   return (
     <section aria-label="主要指標" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
       {!k ? Array.from({ length: 7 }).map((_, i) => <div key={i} className="panel h-[86px] animate-pulse" />) : tiles.map((t) => (
-        <div key={t.label} className="panel min-w-0 px-3 py-2.5">
+        <div key={t.label} className="panel min-w-0 overflow-hidden px-3 py-2.5">
+          <span className="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" aria-hidden />
           <p className="truncate text-[11px] text-muted">{t.label}</p>
-          <p className="num mt-0.5 truncate text-xl">{t.value}</p>
+          <p className="num mt-0.5 truncate text-[22px] [text-shadow:0_0_14px_rgba(0,217,255,0.25)]">{t.value}</p>
           {t.sub && <p className="mt-0.5 truncate text-[10px] text-muted" title={t.sub}>{t.sub}</p>}
         </div>
       ))}

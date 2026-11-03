@@ -64,3 +64,10 @@ export const AGENT_STATE: Record<string, { label: string; tone: Tone }> = {
   error: { label: "要確認", tone: "error" },
   unavailable: { label: "未接続", tone: "warn" },
 };
+
+export const KIND_LABEL: Record<string, string> = {
+  generate_post: "投稿生成・チェック", publish_post: "投稿公開", collect_metrics: "実績取得", reconcile_post: "結果照会",
+  analyze: "分析・自動改善", daily_report: "日次レポート", weekly_report: "週次レポート", refill_ideas: "ネタ補充",
+  assistant: "AI補助", check_connection: "接続確認",
+};
+export const kindLabel = (k: string) => KIND_LABEL[k] ?? k;

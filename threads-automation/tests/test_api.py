@@ -50,6 +50,8 @@ def test_overview_and_capabilities(client):
     assert {a["id"] for a in o["agents"]} == {"orchestrator", "threads_ops", "content", "analytics"}
     assert all(a["state"] == "unavailable" for a in o["agents"])       # no worker heartbeat → never "running"
     assert o["kpi"]["success_rate_today"] is None
+    assert len(o["activity_24h"]) == 24 and sum(o["activity_24h"]) == 0
+    assert o["job_stats_24h"] == {}
     caps = client.get("/v1/accounts/a1/capabilities", headers=H()).json()["actions"]
     assert caps["publish.live"]["enabled"] is False and caps["publish.live"]["reason"]
     assert caps["post.delete_published"]["enabled"] is False

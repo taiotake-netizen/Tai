@@ -47,7 +47,9 @@ try {
   await login(page);
   check("dashboard renders with demo badge", await page.getByText("デモデータ").first().isVisible());
   check("3D canvas mounted", (await page.locator("canvas").count()) > 0);
-  check("agent cards present", (await page.getByRole("button", { pressed: false }).filter({ hasText: "コンテンツ制作" }).count()) === 1);
+  check("agent card + org chart node present", (await page.getByRole("button", { pressed: false }).filter({ hasText: "コンテンツ制作" }).count()) === 2);
+  check("org chart rendered", await page.getByRole("heading", { name: "AI組織図" }).isVisible()
+    && (await page.locator("section[aria-labelledby='org-title'] svg path").count()) > 4);
   check("desktop: no horizontal scroll", await noHorizontalScroll(page));
   await page.screenshot({ path: `${OUT}/desktop.png`, fullPage: true });
 
@@ -68,7 +70,8 @@ try {
   // agent selection drives the core label
   await page.getByRole("button").filter({ hasText: "集客分析" }).first().click();
   const pressed = await page.getByRole("button", { pressed: true }).count();
-  check("agent card selectable (aria-pressed)", pressed === 1);
+  check("selection syncs agent card and org chart node", pressed === 2);
+  check("core shows selected department", (await page.getByText("集客分析", { exact: true }).first().isVisible()));
   await page.getByRole("button", { name: "全体表示に戻す" }).click();
 
   // demo scenario: generate + publish → success events appear in activity, core reacts

@@ -113,3 +113,15 @@ def test_jobs_listing_labels(ctx, account):
     jid, created = jobs.enqueue(ctx.conn, "acc", "analyze", "k1", timeutil.now())
     assert created
     assert loads(ctx.conn.execute("SELECT payload_json FROM jobs WHERE id=?", (jid,)).fetchone()[0]) == {}
+
+
+def test_overview_activity_counts(ctx, account):
+    from threads_ops.api_views import overview
+    seed_ideas(ctx)
+    for _ in range(24 * 4):
+        scheduler.tick(ctx)
+        drain(ctx)
+        advance(minutes=15)
+    o = overview(ctx, "acc")
+    assert len(o["activity_24h"]) == 24 and sum(o["activity_24h"]) > 0
+    assert o["job_stats_24h"]["publish_post"]["succeeded"] >= 1

@@ -31,6 +31,8 @@ export type Overview = {
     budget_configured: boolean; price_configured: boolean };
   agents: Agent[];
   attention: { kind: "post" | "job"; id: number; status: string; message: string | null; updated_at: string }[];
+  job_stats_24h?: Record<string, { succeeded: number; failed: number; running: number; queued: number }>;
+  activity_24h?: number[];
   generated_at: string;
 };
 

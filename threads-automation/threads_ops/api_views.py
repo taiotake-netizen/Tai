@@ -10,7 +10,7 @@ from .db import loads, rows
 from .llm import usage_summary
 from .scheduler import next_runs
 from .store import active_policy, get_account, get_settings, get_state, is_test_scope
-from .timeutil import iso, now, tz
+from .timeutil import iso, now, parse, tz
 
 HEARTBEAT_STALE_S = 180
 
@@ -29,7 +29,6 @@ AGENTS = [
 def _fresh(state: dict | None, key: str) -> bool:
     if not state:
         return False
-    from .timeutil import parse
     ts = state["value"].get(key) or state["updated_at"]
     return (now() - parse(ts)).total_seconds() < HEARTBEAT_STALE_S
 
@@ -132,6 +131,22 @@ def overview(ctx: Ctx, account_id: str) -> dict:
         "SELECT 'job' kind, id, status, kind || ': ' || COALESCE(last_error,'') message, updated_at FROM jobs WHERE account_id=?"
         " AND status='failed' AND updated_at>=? ORDER BY updated_at DESC LIMIT 10",
         (account_id, iso(now() - timedelta(hours=48)))).fetchall())
+    since24 = iso(now() - timedelta(hours=24))
+    job_stats: dict[str, dict[str, int]] = {}
+    for r in conn.execute(
+            "SELECT kind, status, COUNT(*) c FROM jobs WHERE account_id=? AND (status IN ('queued','running','cancel_requested')"
+            " OR finished_at>=?) GROUP BY kind, status", (account_id, since24)):
+        job_stats.setdefault(r["kind"], {"succeeded": 0, "failed": 0, "running": 0, "queued": 0})
+        key = {"cancel_requested": "running", "cancelled": None}.get(r["status"], r["status"])
+        if key in job_stats[r["kind"]]:
+            job_stats[r["kind"]][key] += r["c"]
+    hourly = [0] * 24
+    base = now()
+    for r in conn.execute("SELECT finished_at FROM jobs WHERE account_id=? AND status='succeeded' AND finished_at>=?",
+                          (account_id, since24)):
+        h = int((base - parse(r["finished_at"])).total_seconds() // 3600)
+        if 0 <= h < 24:
+            hourly[23 - h] += 1
     pol = active_policy(conn, account_id)
     exp = conn.execute("SELECT id, variable, control_value, treatment_value, hypothesis, started_at FROM experiments"
                        " WHERE account_id=? AND status='running'", (account_id,)).fetchone()
@@ -163,5 +178,7 @@ def overview(ctx: Ctx, account_id: str) -> dict:
         "budget": usage_summary(conn, account_id, s),
         "agents": agents(ctx, account_id, rt, s, account),
         "attention": attention,
+        "job_stats_24h": job_stats,          # per job kind: succeeded/failed in last 24h, running/queued now
+        "activity_24h": hourly,              # succeeded jobs per hour, oldest → newest
         "generated_at": iso(now()),
     }
